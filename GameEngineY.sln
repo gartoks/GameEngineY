@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26430.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameEngineY", "GameEngineY\GameEngineY.csproj", "{3192709D-7C16-49F4-BE80-F0DD35EF63E6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameApp", "GameApp\GameApp.csproj", "{9244619E-624C-484A-AB43-EAAEDEA95615}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameEngine", "GameEngine\GameEngine.csproj", "{98C341AA-2AE1-4450-9A1D-9FFFFEAD1AC0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3192709D-7C16-49F4-BE80-F0DD35EF63E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3192709D-7C16-49F4-BE80-F0DD35EF63E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3192709D-7C16-49F4-BE80-F0DD35EF63E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3192709D-7C16-49F4-BE80-F0DD35EF63E6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9244619E-624C-484A-AB43-EAAEDEA95615}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9244619E-624C-484A-AB43-EAAEDEA95615}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9244619E-624C-484A-AB43-EAAEDEA95615}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9244619E-624C-484A-AB43-EAAEDEA95615}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98C341AA-2AE1-4450-9A1D-9FFFFEAD1AC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98C341AA-2AE1-4450-9A1D-9FFFFEAD1AC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98C341AA-2AE1-4450-9A1D-9FFFFEAD1AC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98C341AA-2AE1-4450-9A1D-9FFFFEAD1AC0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
