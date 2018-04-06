@@ -45,7 +45,7 @@ namespace GameApp.Settings {
         }
 
         internal void Install() {
-            settings = new XMLElement(AppConstants.Internals.SETTINGS_XML_ROOT);   // TODO magic number
+            settings = new XMLElement(AppConstants.Internals.SETTINGS_XML_ROOT);
 
             SaveSettings();
         }

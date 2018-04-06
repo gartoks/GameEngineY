@@ -115,7 +115,7 @@ namespace GameEngine.Game.GameObjects.GameObjectComponents {
         public float Zoom {
             get => this.zoom;
             set {
-                if (value == 0)
+                if (System.Math.Abs(value) < 0.0000001)
                     throw new ArgumentOutOfRangeException(nameof(value));
 
                 this.zoom = value;

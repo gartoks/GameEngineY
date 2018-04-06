@@ -35,6 +35,14 @@ namespace GameEngine.Game {
         IEnumerable<IGameObject> FindGameObjectsByName(string name, bool activeOnly = true);
 
         /// <summary>
+        /// Finds the game objects in range of the given point.
+        /// </summary>
+        /// <param name="p">The point.</param>
+        /// <param name="range">The range.</param>
+        /// <returns></returns>
+        IEnumerable<IGameObject> FindGameObjectsInRange(Vector2 p, float range);
+
+        /// <summary>
         /// Finds game objects using a selector.
         /// </summary>
         /// <param name="selector">The selector.</param>

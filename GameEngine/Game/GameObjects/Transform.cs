@@ -4,14 +4,22 @@ using GameEngine.Math;
 
 namespace GameEngine.Game.GameObjects {
     public sealed class Transform {
+
+        public delegate void GlobalPositionChangedEventHandler(IGameObject gameObject);
+
         public IGameObject GameObject { get; }
 
         private readonly Vector2 position;
         private readonly Vector2 scale;
         private float rotation;
 
-        private readonly Matrix4 transformationMatrix;
-        private bool isMatrixDirty;
+        private readonly Matrix4 localTransformationMatrix;
+        private bool isLocalTransformationMatrixDirty;
+
+        private readonly Matrix4 globalTransformationMatrix;
+        private bool isGlobalTransformationMatrixDirty;
+
+        public event GlobalPositionChangedEventHandler OnGlobalPositionChanged;
 
         internal Transform(IGameObject gameObject, Vector2 position, float rotation = 0, Vector2 scale = null) {
             GameObject = gameObject;
@@ -20,12 +28,14 @@ namespace GameEngine.Game.GameObjects {
             this.scale = new Vector2();
             this.rotation = 0;
 
+            this.localTransformationMatrix = Matrix4.CreateIdentity();
+            this.isLocalTransformationMatrixDirty = false;
+            this.globalTransformationMatrix = Matrix4.CreateIdentity();
+            this.isGlobalTransformationMatrixDirty = false;
+
             Position = position == null ? new Vector2() : position;
             Rotation = rotation;
             Scale = scale == null ? new Vector2(1, 1) : scale;
-            
-            this.transformationMatrix = Matrix4.CreateIdentity();
-            this.isMatrixDirty = false;
         }
 
         public Vector2 Position {
@@ -34,8 +44,11 @@ namespace GameEngine.Game.GameObjects {
                 if (value == null)
                     throw new ArgumentNullException(nameof(value));
 
+                if (position.Equals(value))
+                    return;
+
                 this.position.Set(value);
-                this.isMatrixDirty = true;
+                MakeLocalTransformationMatrixDirty();
             }
         }
 
@@ -45,12 +58,15 @@ namespace GameEngine.Game.GameObjects {
                 if (float.IsNaN(value) || float.IsInfinity(value))
                     throw new ArgumentOutOfRangeException(nameof(value));
 
+                if (System.Math.Abs(rotation - value) < 0.00001f)
+                    return;
+
                 this.rotation = value;
                 while (this.rotation < 0)
                     this.rotation += Mathf.TWO_PI;
                 this.rotation %= Mathf.TWO_PI;
 
-                this.isMatrixDirty = true;
+                MakeLocalTransformationMatrixDirty();
             }
         }
 
@@ -60,31 +76,60 @@ namespace GameEngine.Game.GameObjects {
                 if (value == null || value.Equals(0, 0))
                     throw new ArgumentNullException(nameof(value));
 
+                if (scale.Equals(value))
+                    return;
+
                 this.scale.Set(value);
-                this.isMatrixDirty = true;
+                MakeLocalTransformationMatrixDirty();
             }
         }
 
-        public Vector2 GlobalPosition => GlobalTransformationMatrix.Multiply(Vector4.ZERO).ToVector2();
+        public Vector2 GlobalPosition => RawGlobalTransformationMatrix.Multiply(Vector4.ZERO).ToVector2();
 
-        public Matrix4 GlobalTransformationMatrix => CalculateGlobalTransformationMatrix(Matrix4.CreateIdentity());
+        public Matrix4 GlobalTransformationMatrix => RawGlobalTransformationMatrix.Clone();
 
-        private Matrix4 CalculateGlobalTransformationMatrix(Matrix4 m) {
-            GameObject.Parent?.Transform.CalculateGlobalTransformationMatrix(m);
-
-            m.MultiplyLeft(LocalTransformationMatrix);
-
-            return m;
-        }
-
-        public Matrix4 LocalTransformationMatrix {
+        private Matrix4 RawGlobalTransformationMatrix {
             get {
-                if (isMatrixDirty) {
-                    this.transformationMatrix.MakeTransformation(this.position, this.rotation, false, this.scale);
-                    this.isMatrixDirty = false;
+                if (isGlobalTransformationMatrixDirty) {
+                    if (GameObject.Parent == null)
+                        this.globalTransformationMatrix.MakeIdentity();
+                    else
+                        this.globalTransformationMatrix.Set(GameObject.Parent.Transform.RawGlobalTransformationMatrix);
+
+                    this.globalTransformationMatrix.MultiplyLeft(RawLocalTransformationMatrix);
+
+                    this.isGlobalTransformationMatrixDirty = false;
                 }
 
-                return this.transformationMatrix.Clone();
+                return this.globalTransformationMatrix;
+            }
+        }
+
+        public Matrix4 LocalTransformationMatrix => RawLocalTransformationMatrix.Clone();
+
+        private Matrix4 RawLocalTransformationMatrix {
+            get {
+                if (isLocalTransformationMatrixDirty) {
+                    this.localTransformationMatrix.MakeTransformation(this.position, this.rotation, false, this.scale);
+                    this.isLocalTransformationMatrixDirty = false;
+                }
+
+                return this.localTransformationMatrix;
+            }
+        }
+
+        private void MakeLocalTransformationMatrixDirty() {
+            this.isLocalTransformationMatrixDirty = true;
+            MakeGlobalTransformationMatrixDirty();
+        }
+
+        private void MakeGlobalTransformationMatrixDirty() {
+            this.isGlobalTransformationMatrixDirty = true;
+
+            OnGlobalPositionChanged?.Invoke(GameObject);
+
+            foreach (IGameObject child in GameObject.Children) {
+                child.Transform.MakeGlobalTransformationMatrixDirty();
             }
         }
 

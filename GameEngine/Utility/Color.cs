@@ -213,17 +213,17 @@ namespace GameEngine.Utility {
             return new Color(r, g, b, a);
         }
 
-        public static Color CalculateGradientColor(Color[] colors, float[] gradients, float t) {
-            if (colors.Length != gradients.Length)
-                throw new ArgumentException("GetColorGradient: color array length does not equal gradients array length.");
+        public static Color Gradient(Color[] colors, float[] keyframes, float t) {
+            if (colors.Length != keyframes.Length)
+                throw new ArgumentException("GetColorGradient: color array length does not equal keyframes array length.");
 
             t = Mathf.Clamp01(t);
 
             Color c = new Color();
             for (int i = 1; i < colors.Length; i++) {
-                if (t <= gradients[i]) {
-                    float ratio = gradients[i] - gradients[i - 1];
-                    float x1 = t - gradients[i - 1];
+                if (t <= keyframes[i]) {
+                    float ratio = keyframes[i] - keyframes[i - 1];
+                    float x1 = t - keyframes[i - 1];
                     float div = x1 / ratio;
                     c.rgbaData = (colors[i].r * div + colors[i - 1].r * (1f - div),
                                     colors[i].g * div + colors[i - 1].g * (1f - div),

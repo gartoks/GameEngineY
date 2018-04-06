@@ -114,8 +114,12 @@
     <Compile Include="Resources\ResourceLoadingParameters.cs" />
     <Compile Include="Settings\ISettingsManager.cs" />
     <Compile Include="Settings\Settings.cs" />
+    <Compile Include="Utility\Algorithms\NoiseGenerator.cs" />
+    <Compile Include="Utility\Algorithms\Pathfinding\AStar.cs" />
+    <Compile Include="Utility\Algorithms\Pathfinding\Path.cs" />
     <Compile Include="Utility\Color.cs" />
     <Compile Include="Utility\DataStructures\ObjectPool.cs" />
+    <Compile Include="Utility\DataStructures\QuadTree.cs" />
     <Compile Include="Utility\Extensions\CollectionExtensions.cs" />
     <Compile Include="Utility\Extensions\RandomExtensions.cs" />
     <Compile Include="Utility\Extensions\StringExtensions.cs" />

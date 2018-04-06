@@ -6,7 +6,7 @@ namespace GameEngine.Math {
         private const int DIM = 4;
         private const int DIM2 = DIM * DIM;
 
-        private float[] data;
+        private readonly float[] data;
 
         public static Matrix4 CreateIdentity() {
             return CreateDiagonal(1, 1, 1, 1);
@@ -439,6 +439,12 @@ namespace GameEngine.Math {
                 for (int row = 0; row < DIM; row++)
                     for (int column = 0; column < DIM; column++)
                         SetRowMajor(value[column + row * DIM], column, row);
+            }
+        }
+
+        public void Set(Matrix4 m) {
+            for (int i = 0; i < DIM2; i++) {
+                this.data[i] = m.data[i];
             }
         }
 

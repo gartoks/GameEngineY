@@ -61,6 +61,8 @@ namespace GameApp.Application {
         internal static class Internals {
             public const string SETTINGS_XML_ROOT = "Settings";
             public const int RESOURCE_THREAD_IDLE_SLEEP_TIME = 250;
+            public const uint SCENE_QUADTREE_SPLIT_MARGIN = 50;
+            public const uint SCENE_QUADTREE_MERGE_MARGIN = 20;
         }
     }
 }

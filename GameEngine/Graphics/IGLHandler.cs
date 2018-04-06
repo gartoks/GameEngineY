@@ -112,11 +112,11 @@ namespace GameEngine.Graphics {
 
         //void SetShaderUniform(int uniformLocation, int v1, int v2, int v3, int v4);
 
-        void SetShaderUniform(int uniformLocation, Math.Matrix2 v1);
+        void SetShaderUniform(int uniformLocation, Matrix2 v1);
 
-        void SetShaderUniform(int uniformLocation, Math.Matrix3 v1);
+        void SetShaderUniform(int uniformLocation, Matrix3 v1);
 
-        void SetShaderUniform(int uniformLocation, Math.Matrix4 v1);
+        void SetShaderUniform(int uniformLocation, Matrix4 v1);
 
         bool IsShaderBound(Shader shader);
         #endregion

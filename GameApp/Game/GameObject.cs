@@ -79,7 +79,7 @@ namespace GameApp.Game {
 
             Name = name;
 
-            Transform = (Transform)TransformConstructorInfo.Invoke(new object[] { this, position, rotation, scale });//new Transform(this, position, rotation, scale);
+            Transform = (Transform)TransformConstructorInfo.Invoke(new object[] { this, position, rotation, scale });
 
             IsEnabled = true;
 
