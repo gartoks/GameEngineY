@@ -35,7 +35,7 @@ namespace GameEngine.Resources {
         /// <typeparam name="R">The resource type.</typeparam>
         /// <typeparam name="RLP">The resource loading parameters type.</typeparam>
         /// <param name="loader">The loader.</param>
-        public static void RegisterResourceLoader<R, RLP>(ResourceLoader<R, RLP> loader) => ModBase.ResourceManager.RegisterResourceLoader<R, RLP>(loader);
+        public static void RegisterResourceLoader<R, RLP>(ResourceLoader<R, RLP> loader) where RLP : ResourceLoadingParameters<R> => ModBase.ResourceManager.RegisterResourceLoader(loader);
 
         /// <summary>
         /// Gets a value indicating whether resources are currently loading.

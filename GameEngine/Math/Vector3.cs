@@ -6,9 +6,6 @@ namespace GameEngine.Math {
         public static Vector3 ZERO => new Vector3(0, 0, 0);
         public static Vector3 IDENTITY => new Vector3(1, 1, 1);
 
-        public delegate void VectorChangedEventHandler(Vector3 v, float oldX, float oldY, float oldZ);
-        public event VectorChangedEventHandler OnChanged;
-
         private float _x;
         private float _y;
         private float _z;
@@ -27,6 +24,9 @@ namespace GameEngine.Math {
             : this(v.x, v.y, 0) { }
 
         public Vector3(Vector3 v)
+            : this(v.x, v.y, v.z) { }
+
+        public Vector3(Vector4 v)
             : this(v.x, v.y, v.z) { }
 
         public Vector3 Set(Vector2 v) {
@@ -107,6 +107,12 @@ namespace GameEngine.Math {
             }
         }
 
+        public Vector2 ToVector2() => new Vector2(this);
+
+        public Vector4 ToVector4() => new Vector4(this);
+
+        public Vector3 Clone() => new Vector3(this);
+
         public static float Dot(Vector3 v1, Vector3 v2) {
             return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
         }
@@ -143,8 +149,6 @@ namespace GameEngine.Math {
                 this._z = value.z;
 
                 this.length = null;
-
-                OnChanged?.Invoke(this, oldX, oldY, oldZ);
             }
         }
 

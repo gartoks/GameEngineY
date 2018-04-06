@@ -200,13 +200,13 @@ namespace GameEngine.Graphics {
 
         void ApplyTransformation(Transform transform);
 
-        void ApplyTranslation(float dx, float dy);
+        //void ApplyTranslation(float dx, float dy);
 
-        void ApplyRotation(float angle);
+        //void ApplyRotation(float angle);
 
         //void ApplyRotation(float angle, float px, float py);
 
-        void ApplyScaling(float sx, float sy);
+        //void ApplyScaling(float sx, float sy);
 
         void RevertTransform();
 

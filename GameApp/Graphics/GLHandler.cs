@@ -930,27 +930,27 @@ namespace GameApp.Graphics {
             this.transformStack.Push(m);
         }
 
-        public void ApplyTranslation(float dx, float dy) {
-            if (!IsRendering)
-                return;
+        //public void ApplyTranslation(float dx, float dy) {
+        //    if (!IsRendering)
+        //        return;
 
-            Matrix4 m = MatrixTransformationHelper.SetTo3DTranslation(dx, -dy, 0, this.matrixPool.Get());
-            if (this.transformStack.Any())
-                m.MultiplyRight(this.transformStack.Peek());
+        //    Matrix4 m = MatrixTransformationHelper.SetTo3DTranslation(dx, -dy, 0, this.matrixPool.Get());
+        //    if (this.transformStack.Any())
+        //        m.MultiplyRight(this.transformStack.Peek());
 
-            this.transformStack.Push(m);
-        }
+        //    this.transformStack.Push(m);
+        //}
 
-        public void ApplyRotation(float angle) {
-            if (!IsRendering)
-                return;
+        //public void ApplyRotation(float angle) {
+        //    if (!IsRendering)
+        //        return;
 
-            Matrix4 m = MatrixTransformationHelper.SetTo3DZAxisClockwiseRotation(angle, this.matrixPool.Get());
-            if (this.transformStack.Any())
-                m.MultiplyRight(this.transformStack.Peek());
+        //    Matrix4 m = MatrixTransformationHelper.SetTo3DZAxisClockwiseRotation(angle, this.matrixPool.Get());
+        //    if (this.transformStack.Any())
+        //        m.MultiplyRight(this.transformStack.Peek());
 
-            this.transformStack.Push(m);
-        }
+        //    this.transformStack.Push(m);
+        //}
 
         //public void ApplyRotation(float angle, float px, float py) {
         //    if (!IsRendering)
@@ -964,16 +964,16 @@ namespace GameApp.Graphics {
         //    this.transformStack.Push(m);
         //}
 
-        public void ApplyScaling(float sx, float sy) {
-            if (!IsRendering)
-                return;
+        //public void ApplyScaling(float sx, float sy) {
+        //    if (!IsRendering)
+        //        return;
 
-            Matrix4 m = MatrixTransformationHelper.SetTo3DScaling(sx, sy, 1, this.matrixPool.Get());
-            if (this.transformStack.Any())
-                m.MultiplyRight(this.transformStack.Peek());
+        //    Matrix4 m = MatrixTransformationHelper.SetTo3DScaling(sx, sy, 1, this.matrixPool.Get());
+        //    if (this.transformStack.Any())
+        //        m.MultiplyRight(this.transformStack.Peek());
 
-            this.transformStack.Push(m);
-        }
+        //    this.transformStack.Push(m);
+        //}
 
         public void RevertTransform() {
             if (!IsRendering)
@@ -985,7 +985,7 @@ namespace GameApp.Graphics {
             this.matrixPool.Put(this.transformStack.Pop());
         }
 
-        public Matrix4 CurrentTransformationMatrix => this.transformStack.Any() ? Matrix4.Create(this.transformStack.Peek()) : this.matrixPool.Get();
+        public Matrix4 CurrentTransformationMatrix => this.transformStack.Any() ? this.transformStack.Peek().Clone(): this.matrixPool.Get();
 
         #endregion
 

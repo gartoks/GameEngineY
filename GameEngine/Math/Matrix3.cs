@@ -292,6 +292,8 @@ namespace GameEngine.Math {
             }
         }
 
+        public Matrix3 Clone() => Matrix3.Create(this);
+
         public override bool Equals(Object obj) {
             if (!(obj is Matrix3 m))
                 return false;

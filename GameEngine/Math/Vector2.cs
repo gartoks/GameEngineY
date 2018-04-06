@@ -6,9 +6,6 @@ namespace GameEngine.Math {
         public static Vector2 ZERO => new Vector2(0, 0);
         public static Vector2 IDENTITY => new Vector2(1, 1);
 
-        public delegate void VectorChangedEventHandler(Vector2 v, float oldX, float oldY);
-        public event VectorChangedEventHandler OnChanged;
-
         private float _x;
         private float _y;
 
@@ -23,8 +20,13 @@ namespace GameEngine.Math {
         }
 
         public Vector2(Vector2 v)
-            : this(v.x, v.y) {
-        }
+            : this(v.x, v.y) { }
+
+        public Vector2(Vector3 v)
+            : this(v.x, v.y) { }
+
+        public Vector2(Vector4 v)
+            : this(v.x, v.y) { }
 
         public Vector2 Set(Vector2 v) {
             Data = (v.x, v.y);
@@ -111,6 +113,12 @@ namespace GameEngine.Math {
             return new Vector2(x, y);
         }
 
+        public Vector3 ToVector3() => new Vector3(this);
+
+        public Vector4 ToVector4() => new Vector4(this);
+
+        public Vector2 Clone() => new Vector2(this);
+
         public static float AngleBetween(Vector2 v1, Vector2 v2) {
             return AngleBetween(v1.x, v1.y, v2.x, v2._y);
         }
@@ -147,8 +155,6 @@ namespace GameEngine.Math {
                 _y = value.y;
 
                 length = null;
-
-                OnChanged?.Invoke(this, oldX, oldY);
             }
         }
 
@@ -205,16 +211,14 @@ namespace GameEngine.Math {
         }
 
         public override bool Equals(object obj) {
-            if (obj == null || !(obj is Vector2))
+            if (!(obj is Vector2 v2))
                 return false;
 
-            Vector2 v = obj as Vector2;
-
-            return Equals(v.x, v.y);
+            return Equals(v2.x, v2.y);
         }
 
         public bool Equals(float x, float y) {
-            return this.x == x && this.y == y;
+            return System.Math.Abs(this.x - x) < 0.00001f && System.Math.Abs(this.y - y) < 0.00001f;
         }
 
         public override int GetHashCode() {

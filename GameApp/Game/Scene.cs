@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading;
 using GameEngine.Logging;
 using Log = GameApp.Logging.Log;
@@ -8,18 +7,10 @@ using System.Linq;
 using GameEngine.Game;
 using GameEngine.Game.GameObjects;
 using GameEngine.Game.GameObjects.GameObjectComponents;
+using GameEngine.Math;
 
 namespace GameApp.Game {
     public sealed class Scene : IScene {
-        static Scene() {
-            GOUpdateMI = typeof(GameObject).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
-            GORenderMI = typeof(GameObject).GetMethod("Render", BindingFlags.NonPublic | BindingFlags.Instance);
-        }
-
-        private static readonly MethodInfo GOUpdateMI;
-        private static readonly MethodInfo GORenderMI;
-        private static readonly object[] EMPTY_OBJECT_ARRAY = new object[0];
-
         public string Name { get; }
 
         public Viewport MainViewport { get; set; }
@@ -42,7 +33,7 @@ namespace GameApp.Game {
                     if (gO.Parent != null)
                         continue;
 
-                    GOUpdateMI.Invoke(gO, EMPTY_OBJECT_ARRAY);  // TODO performance?
+                    gO.Update();
                 } else if (!gO.IsAlive) {
                     this.gameObjectsBuffer.Remove(gO);
                     this.bufferModified = true;
@@ -65,8 +56,16 @@ namespace GameApp.Game {
 
             foreach (GameObject gO in this.gameObjects) {
                 if (gO.IsAlive && gO.IsEnabled)
-                    GORenderMI.Invoke(gO, EMPTY_OBJECT_ARRAY);  // TODO performance?
+                    gO.Render();
             }
+        }
+
+        public GameObject CreateGameObject(string name, GameObject parent, Vector2 position, float rotation, Vector2 scale) {
+            return new GameObject(name, parent, position, rotation, scale, this);
+        }
+
+        IGameObject IScene.CreateGameObject(string name, IGameObject parent, Vector2 position, float rotation, Vector2 scale) {
+            return CreateGameObject(name, (GameObject)parent, position, rotation, scale);
         }
 
         internal void AddGameObject(GameObject gameObject) {
@@ -79,18 +78,20 @@ namespace GameApp.Game {
             this.bufferModified = true;
         }
 
-        public IEnumerable<GameObject> GameObjects => this.gameObjects;
-
         public IEnumerable<GameObject> FindGameObjectsByName(string name, bool activeOnly = true) {
             return FindGameObjects(gO => gO.Name == name && (gO.IsEnabled || !activeOnly));
         }
 
-        public IEnumerable<GameObject> FindGameObjects(Func<GameObject, bool> selector) {
-            return GameObjects.Where(selector);
-        }
+        IEnumerable<IGameObject> IScene.FindGameObjectsByName(string name, bool activeOnly) => FindGameObjectsByName(name, activeOnly);
 
-        public IEnumerable<T> FindComponentsByType<T>(bool activeOnly = true) where T : GOC {
-            return GameObjects.Where(gO => gO.IsEnabled || !activeOnly).SelectMany(gO => gO.GetComponents<T>());
-        }
+        public IEnumerable<GameObject> FindGameObjects(Func<GameObject, bool> selector) => GameObjects.Where(selector);
+
+        IEnumerable<IGameObject> IScene.FindGameObjects(Func<IGameObject, bool> selector) => FindGameObjects(selector);
+
+        public IEnumerable<GameObject> GameObjects => this.gameObjects;
+
+        IEnumerable<IGameObject> IScene.GameObjects => GameObjects;
+
+        public IEnumerable<T> FindComponentsByType<T>(bool activeOnly = true) where T : GOC => GameObjects.Where(gO => gO.IsEnabled || !activeOnly).SelectMany(gO => gO.GetComponents<T>());
     }
 }

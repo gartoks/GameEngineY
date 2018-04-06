@@ -183,13 +183,37 @@ namespace GameEngine.Math {
             float b32 = rc00 * rc12 * rc31 + rc01 * rc10 * rc32 + rc02 * rc11 * rc30 - rc00 * rc11 * rc32 - rc01 * rc12 * rc30 - rc02 * rc10 * rc31;
             float b33 = rc00 * rc11 * rc22 + rc01 * rc12 * rc20 + rc02 * rc10 * rc21 - rc00 * rc12 * rc21 - rc01 * rc10 * rc22 - rc02 * rc11 * rc20;
 
-            return Matrix4.CreateRowMajor(
-                b00, b01, b02, b03,
-                b10, b11, b12, b13,
-                b20, b21, b22, b23,
-                b30, b31, b32, b33
-                ).Scale(1f / det);
+            SetColumnMajor(b00, 0, 0);
+            SetColumnMajor(b01, 0, 1);
+            SetColumnMajor(b02, 0, 2);
+            SetColumnMajor(b03, 0, 3);
+
+            SetColumnMajor(b10, 1, 0);
+            SetColumnMajor(b11, 1, 1);  // TODO make sure is set column major
+            SetColumnMajor(b12, 1, 2);
+            SetColumnMajor(b13, 1, 3);
+
+            SetColumnMajor(b20, 2, 0);
+            SetColumnMajor(b21, 2, 1);
+            SetColumnMajor(b22, 2, 2);
+            SetColumnMajor(b23, 2, 3);
+
+            SetColumnMajor(b30, 3, 0);
+            SetColumnMajor(b31, 3, 1);
+            SetColumnMajor(b32, 3, 2);
+            SetColumnMajor(b33, 3, 3);
+
+            return this;
+
+            //return Matrix4.CreateRowMajor(
+            //    b00, b01, b02, b03,
+            //    b10, b11, b12, b13,
+            //    b20, b21, b22, b23,
+            //    b30, b31, b32, b33
+            //    ).Scale(1f / det);
         }
+
+        public Matrix4 GetInverse() => Matrix4.Create(this).Inverse();
 
         public Matrix4 MakeIdentity() {
             rc00 = 1;
@@ -418,6 +442,8 @@ namespace GameEngine.Math {
             }
         }
 
+        public Matrix4 Clone() => Matrix4.Create(this);
+
         public override bool Equals(Object obj) {
             if (!(obj is Matrix4 m))
                 return false;
@@ -480,6 +506,20 @@ namespace GameEngine.Math {
             return this;
         }
 
+        public Vector4 Multiply(Vector4 v) {
+            float[] cm = new float[DIM];
+
+            for (int i = 0; i < DIM; i++) {
+                for (int k = 0; k < DIM; k++) {
+                    cm[i] += this.ColumnMajor[k * DIM + i] * v[k];
+                }
+            }
+
+            v.Set(cm[0], cm[1], cm[2], cm[3]);
+
+            return v;
+        }
+
         public static Matrix4 operator *(Matrix4 m0, Matrix4 m1) {
             return Create(m0).MultiplyRight(m1);
         }
@@ -490,6 +530,10 @@ namespace GameEngine.Math {
 
         public static Matrix4 operator *(float s, Matrix4 m0) {
             return m0 * s;
+        }
+
+        public static Vector4 operator *(Matrix4 m, Vector4 v) {
+            return m.Multiply(new Vector4(v));
         }
     }
 }

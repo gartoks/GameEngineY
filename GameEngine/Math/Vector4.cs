@@ -6,9 +6,6 @@ namespace GameEngine.Math {
         public static Vector4 ZERO => new Vector4(0, 0, 0, 0);
         public static Vector4 IDENTITY => new Vector4(1, 1, 1, 1);
 
-        public delegate void VectorChangedEventHandler(Vector4 v, float oldX, float oldY, float oldZ, float oldW);
-        public event VectorChangedEventHandler OnChanged;
-
         private float _x;
         private float _y;
         private float _z;
@@ -117,6 +114,12 @@ namespace GameEngine.Math {
             }
         }
 
+        public Vector2 ToVector2() => new Vector2(this);
+
+        public Vector3 ToVector3() => new Vector3(this);
+
+        public Vector4 Clone() => new Vector4(this);
+
         public static float Dot(Vector4 v1, Vector4 v2) {
             return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z + v1.w * v2.w;
         }
@@ -148,8 +151,6 @@ namespace GameEngine.Math {
                 this._w = value.w;
 
                 this.length = null;
-
-                OnChanged?.Invoke(this, oldX, oldY, oldZ, oldW);
             }
         }
 
@@ -206,7 +207,7 @@ namespace GameEngine.Math {
         }
 
         public override string ToString() {
-            return $"({x}, {y}. {z}, {w})";
+            return $"({x}, {y}, {z}, {w})";
         }
 
         public override bool Equals(object obj) {

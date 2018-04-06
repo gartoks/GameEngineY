@@ -30,13 +30,12 @@ namespace GameApp.Application {
 
         private readonly ApplicationInitializationSettings initializationSettings;
 
-
         public string Name => initializationSettings.Name;
         public Version Version => initializationSettings.Version;
 
         private bool running = false;
-        public Thread UpdateThread { get; private set; }
-        public Thread ResourceThread { get; private set; }
+        internal Thread UpdateThread { get; private set; }
+        private Thread resourceThread;
 
         public Application(ApplicationInitializationSettings initializationSettings) {
             Instance = this;
@@ -56,15 +55,15 @@ namespace GameApp.Application {
 
             Initialize();
 
-            Application.Instance.ResourceThread = new Thread(ResourceLoop);
-            Application.instance.ResourceThread.Name = "ResourceThread";
+            Application.Instance.resourceThread = new Thread(ResourceLoop);
+            Application.instance.resourceThread.Name = "ResourceThread";
             Application.Instance.UpdateThread = new Thread(UpdateLoop);
             Application.instance.UpdateThread.Name = "UpdateThread";
 
             Application.Instance.running = true;
 
             Window.Window.Instance.Show();
-            Application.Instance.ResourceThread.Start();
+            Application.Instance.resourceThread.Start();
             Application.Instance.UpdateThread.Start();
         }
 
@@ -72,7 +71,7 @@ namespace GameApp.Application {
             Thread exitThread = new Thread(() => {
                 this.running = false;
                 try {
-                    ResourceThread.Join();
+                    resourceThread.Join();
                     UpdateThread.Join();
 
                     Window.Window.Instance.Close();

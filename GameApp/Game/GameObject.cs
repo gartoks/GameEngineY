@@ -4,6 +4,9 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Threading;
+using GameApp.Graphics;
+using GameEngine.Game;
+using GameEngine.Game.GameObjects;
 using GameEngine.Game.GameObjects.GameObjectComponents;
 using GameEngine.Game.Utility;
 using GameEngine.Graphics;
@@ -11,9 +14,12 @@ using GameEngine.Logging;
 using GameEngine.Math;
 using GameEngine.Modding;
 
-namespace GameEngine.Game.GameObjects {
-    public sealed class GameObject {
-        public delegate void GameObjectComponentModificationEventHandler(GameObject gameObject, GOC component);
+namespace GameApp.Game {
+    public sealed class GameObject : IGameObject {
+
+        private static ConstructorInfo TransformConstructorInfo;
+        private static PropertyInfo GOCUpdateGetterPropertyInfo;
+        private static PropertyInfo GOCRenderGetterPropertyInfo;
 
         internal IScene Scene { get; }
 
@@ -23,37 +29,38 @@ namespace GameEngine.Game.GameObjects {
 
         private string name;
 
-        public bool IsEnabled;
+        public bool IsEnabled { get; set; }
         private GameObject parent;
         private readonly HashSet<GameObject> children;
 
         public Transform Transform { get; }
 
-        private readonly List<GOC> components;
-        private readonly List<GOC> componentsBuffer;
+        private readonly List<(GOC goc, Action update, Action render)> components;
+        private readonly List<(GOC goc, Action update, Action render)> componentsBuffer;
         private bool bufferModified;
 
         public event GameObjectComponentModificationEventHandler OnComponentAdd;
         public event GameObjectComponentModificationEventHandler OnComponentRemove;
 
-        public GameObject(string name)
-            : this(name, null, 0) { }
-
-        public GameObject(string name, Vector2 position = null, float rotation = 0, Vector2 scale = null)
-            : this(name, null, position, rotation, scale) { }
-
-        public GameObject(string name, GameObject parent = null, Vector2 position = null, float rotation = 0, Vector2 scale = null)
-            : this(name, parent, position, rotation, scale, ModBase.SceneManager.ActiveScene) {
-        }
-
         internal GameObject(string name, GameObject parent = null, Vector2 position = null, float rotation = 0, Vector2 scale = null, IScene scene = null) {
-            if (ModBase.SceneManager.ActiveScene == null) {
+            // static setup
+            if (TransformConstructorInfo == null)
+                TransformConstructorInfo = typeof(Transform).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null, new[] {typeof(IGameObject), typeof(Vector2), typeof(float), typeof(Vector2)}, null); // TODO check if works
+
+            if (GOCUpdateGetterPropertyInfo == null)
+                GOCUpdateGetterPropertyInfo = typeof(GOC).GetProperty("GetUpdateMethod", BindingFlags.Instance | BindingFlags.NonPublic, null, typeof(Action), new Type[0], null);
+
+            if (GOCRenderGetterPropertyInfo == null)
+                GOCRenderGetterPropertyInfo = typeof(GOC).GetProperty("GetRenderMethod", BindingFlags.Instance | BindingFlags.NonPublic, null, typeof(Action), new Type[0], null);
+
+            // ctor
+            if (SceneManager.Instance.ActiveScene == null) {
                 Log.WriteLine($"Cannote create GameObject ({name}) when no scene is active.", LogType.Error);
                 return;
             }
 
             if (scene == null)
-                scene = ModBase.SceneManager.ActiveScene;
+                scene = SceneManager.Instance.ActiveScene;
 
             Scene = scene;
 
@@ -64,19 +71,17 @@ namespace GameEngine.Game.GameObjects {
                 scale = new Vector2(1, 1);
 
             this.children = new HashSet<GameObject>();
-            this.components = new List<GOC>();
-            this.componentsBuffer = new List<GOC>();
+            this.components = new List<(GOC, Action, Action)>();
+            this.componentsBuffer = new List<(GOC, Action, Action)>();
             this.bufferModified = false;
 
             ID = Guid.NewGuid();
 
             Name = name;
 
-            Transform = new Transform(this, position, rotation, scale);
+            Transform = (Transform)TransformConstructorInfo.Invoke(new object[] { this, position, rotation, scale });//new Transform(this, position, rotation, scale);
 
             IsEnabled = true;
-
-            Game.Scene.AddGameObject(Scene, this);
 
             Parent = parent;
 
@@ -91,11 +96,11 @@ namespace GameEngine.Game.GameObjects {
             this.updatingChildren.Clear();
             this.updatingChildren.AddRange(Children);
 
-            foreach (GOC goc in this.components) {
-                if (!goc.IsActive)
+            foreach ((GOC goc, Action update, Action render) goc in this.components) {
+                if (!goc.goc.IsActive)
                     continue;
-                
-                goc.Update();
+
+                goc.update();
             }
 
             if (this.bufferModified) {
@@ -116,13 +121,13 @@ namespace GameEngine.Game.GameObjects {
             if (!IsEnabled)
                 return;
 
-            GLHandler.ApplyTransformation(Transform);
+            GLHandler.Instance.ApplyTransformation(Transform);
 
-            foreach (GOC goc in this.components) {
-                if (!goc.IsActive)
+            foreach ((GOC goc, Action update, Action render) goc in this.components) {
+                if (!goc.goc.IsActive)
                     return;
 
-                goc.Renderable?.Render();
+                goc.render();
             }
 
             this.renderingChildren.Clear();
@@ -132,7 +137,7 @@ namespace GameEngine.Game.GameObjects {
                 child.Render();
             }
 
-            GLHandler.RevertTransform();
+            GLHandler.Instance.RevertTransform();
         }
 
         public T AddComponent<T>(params object[] initializationParameters) where T : GOC {
@@ -140,13 +145,18 @@ namespace GameEngine.Game.GameObjects {
         }
 
         internal GOC AddComponent(Type t, bool isEnabled, object[] initializationParameters, IEnumerable<(string fieldName, object fielValue)> fields) {
-            if (!Thread.CurrentThread.Equals(Game.Scene.UpdateThread)) {
-                Log.WriteLine($"A GOC can only be added to a GameObject ({Name}) from the update thread.", LogType.Error);
+            if (!Thread.CurrentThread.Equals(Application.Application.Instance.UpdateThread)) {
+                Log.WriteLine($"A GameObjectComponent (GOC) can only be added to a GameObject ({Name}) from the update thread.", LogType.Error);
+                return null;
+            }
+
+            if (!typeof(GOC).IsAssignableFrom(t)) {
+                Log.WriteLine($"Cannot add a GameObjectComponent (GOC) to a GameObject({Name}) that is not derived from the GOC base class.", LogType.Error);
                 return null;
             }
 
             if (t.IsAbstract) {
-                Log.WriteLine($"Cannot add an abstract component to a GameObject ({Name}).", LogType.Error);
+                Log.WriteLine($"Cannot add an abstract GameObjectComponent (GOC) to a GameObject ({Name}).", LogType.Error);
                 return null;
             }
 
@@ -161,9 +171,14 @@ namespace GameEngine.Game.GameObjects {
 
             ConstructorInfo ctor = t.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, Type.EmptyTypes, null);
             GOC component = ctor.Invoke(new object[0]) as GOC;
-            component.GameObject = this;
 
-            this.componentsBuffer.Add(component);
+            FieldInfo gOFI = typeof(GOC).GetField("gameObject", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            gOFI.SetValue(component, this);
+
+            Action updateAction = (Action)GOCUpdateGetterPropertyInfo.GetValue(component);
+            Action renderAction = (Action)GOCRenderGetterPropertyInfo.GetValue(component);
+
+            this.componentsBuffer.Add((component, updateAction, renderAction));
             this.bufferModified = true;
 
             component.IsEnabled = isEnabled;
@@ -201,20 +216,21 @@ namespace GameEngine.Game.GameObjects {
             return component;
         }
 
-        internal void RemoveComponent(GOC component) {
-            if (!Thread.CurrentThread.Equals(Game.Scene.UpdateThread)) {
+        public void RemoveComponent(GOC component) {
+            if (!Thread.CurrentThread.Equals(Application.Application.Instance.UpdateThread)) {
                 Log.WriteLine($"A GOC can only be removed from a GameObject ({Name}) from the update thread.", LogType.Error);
                 return;
             }
 
-            if (!this.components.Contains(component))
+            int index = this.components.FindIndex(tuple => tuple.Item1 == component);
+            if (index == -1)
                 return;
 
             component.Death();
 
             OnComponentRemove?.Invoke(this, component);
 
-            this.componentsBuffer.Remove(component);
+            this.componentsBuffer.RemoveAt(index);
             this.bufferModified = true;
         }
 
@@ -253,7 +269,7 @@ namespace GameEngine.Game.GameObjects {
         }
 
         public IEnumerable<GOC> FindComponents(Func<GOC, bool> selector, GOCSearchMode searchMode = GOCSearchMode.This) {
-            IEnumerable<GOC> comps = this.components.Where(selector);
+            IEnumerable<GOC> comps = this.components.Select(tuple => tuple.Item1).Where(selector);
 
             if (searchMode == GOCSearchMode.This)
                 return comps;
@@ -279,9 +295,13 @@ namespace GameEngine.Game.GameObjects {
             }
         }
 
+        IEnumerable<IGameObject> IGameObject.GetParentalHierarchy(bool includeCurrent) => GetParentalHierarchy(includeCurrent);
+
         public GameObject GetRootGameObject() {
             return Parent == null ? this : Parent.GetRootGameObject();
         }
+
+        IGameObject IGameObject.GetRootGameObject() => GetRootGameObject();
 
         public GameObject Parent {
             get => this.parent;
@@ -294,6 +314,11 @@ namespace GameEngine.Game.GameObjects {
                 else
                     Parent?.UnmakeChild(this);
             }
+        }
+
+        IGameObject IGameObject.Parent {
+            get => Parent;
+            set => Parent = (GameObject)value;
         }
 
         private void MakeChild(GameObject child) {
@@ -322,8 +347,6 @@ namespace GameEngine.Game.GameObjects {
             child.parent = null;
         }
 
-        public IEnumerable<GameObject> Children => this.children;
-
         public IEnumerable<GameObject> FindChildren(Func<GameObject, bool> selector, bool includeChildrensChildren = false) {
             IEnumerable<GameObject> chs = this.children.Where(selector);
 
@@ -337,15 +360,18 @@ namespace GameEngine.Game.GameObjects {
             return chs;
         }
 
-        public void Kill() {
-            Destroy();
+        IEnumerable<IGameObject> IGameObject.FindChildren(Func<IGameObject, bool> selector, bool includeChildrensChildren = false) {
+            return FindChildren(selector, includeChildrensChildren);
         }
+        public IEnumerable<GameObject> Children => this.children;
+
+        IEnumerable<IGameObject> IGameObject.Children => Children;
 
         public void Destroy() {
             this.isAlive = false;
 
             for (int i = this.components.Count - 1; i >= 0; i--) {
-                this.components[i].Destroy();
+                this.components[i].goc.Destroy();
             }
         }
 

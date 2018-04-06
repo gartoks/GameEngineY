@@ -5,7 +5,7 @@ using GameEngine.Graphics.Textures;
 using GameEngine.Graphics.Utility;
 
 namespace GameEngine.Graphics {
-    public class Renderable : IDisposable {
+    public sealed class Renderable : IDisposable {
         private readonly Shader shader;
         private readonly Mesh mesh;
 

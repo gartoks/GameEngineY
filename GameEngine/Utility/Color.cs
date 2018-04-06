@@ -1,4 +1,5 @@
 ﻿using System;
+using GameEngine.Math;
 
 namespace GameEngine.Utility {
     public struct Color {

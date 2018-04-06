@@ -1,24 +1,43 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
-using System.Threading;
 using GameEngine.Game.GameObjects;
 using GameEngine.Game.GameObjects.GameObjectComponents;
+using GameEngine.Math;
 using GameEngine.Modding;
 
 namespace GameEngine.Game {
     public static class Scene {
 
-        private static MethodInfo AddGameObjectMethodInfo;
-        private static PropertyInfo UpdateThreadPropertyInfo;
+        /// <summary>
+        /// Creates a new GameObject and adds it to the scene.
+        /// </summary>
+        /// <param name="name">The name.</param>
+        /// <param name="position">The position.</param>
+        /// <param name="rotation">The rotation.</param>
+        /// <param name="scale">The scale.</param>
+        /// <returns></returns>
+        public static IGameObject CreateGameObject(string name, Vector2 position = null, float rotation = 0, Vector2 scale = null)
+            => ModBase.SceneManager.ActiveScene.CreateGameObject(name, null, position, rotation, scale);
 
-        public static IEnumerable<GameObject> GameObjects => ModBase.SceneManager.ActiveScene.GameObjects;
+        /// <summary>
+        /// Creates a new GameObject and adds it to the scene.
+        /// </summary>
+        /// <param name="name">The name.</param>
+        /// <param name="parent">The parent.</param>
+        /// <param name="position">The position.</param>
+        /// <param name="rotation">The rotation.</param>
+        /// <param name="scale">The scale.</param>
+        /// <returns></returns>
+        public static IGameObject CreateGameObject(string name, IGameObject parent = null, Vector2 position = null, float rotation = 0, Vector2 scale = null)
+            => ModBase.SceneManager.ActiveScene.CreateGameObject(name, parent, position, rotation, scale);
 
-        public static IEnumerable<GameObject> FindGameObjectsByName(string name, bool activeOnly = true) {
+        public static IEnumerable<IGameObject> GameObjects => ModBase.SceneManager.ActiveScene.GameObjects;
+
+        public static IEnumerable<IGameObject> FindGameObjectsByName(string name, bool activeOnly = true) {
             return ModBase.SceneManager.ActiveScene.FindGameObjectsByName(name, activeOnly);
         }
 
-        public static IEnumerable<GameObject> FindGameObjects(Func<GameObject, bool> selector) {
+        public static IEnumerable<IGameObject> FindGameObjects(Func<IGameObject, bool> selector) {
             return ModBase.SceneManager.ActiveScene.FindGameObjects(selector);
         }
 
@@ -29,26 +48,6 @@ namespace GameEngine.Game {
         public static Viewport MainViewport {
             get => ModBase.SceneManager.ActiveScene.MainViewport;
             set => ModBase.SceneManager.ActiveScene.MainViewport = value;
-        }
-
-        internal static void AddGameObject(IScene scene, GameObject gameObject) {
-            if (AddGameObjectMethodInfo == null) {
-                Type smType = ModBase.SceneManager.ActiveScene.GetType();    // TODO make sure this works
-                AddGameObjectMethodInfo = smType.GetMethod("AddGameObject", BindingFlags.Instance | BindingFlags.NonPublic, null, new []{ typeof(GameObject) }, null);
-            }
-
-            AddGameObjectMethodInfo.Invoke(scene, new[] { gameObject });
-        }
-
-        internal static Thread UpdateThread {
-            get {
-                if (UpdateThreadPropertyInfo == null) {
-                    Type smType = ModBase.App.GetType();    // TODO make sure this works
-                    UpdateThreadPropertyInfo = smType.GetProperty("UpdateThread", BindingFlags.Instance | BindingFlags.Public);
-                }
-
-                return (Thread)UpdateThreadPropertyInfo.GetValue(ModBase.SceneManager);
-            }
         }
     }
 }

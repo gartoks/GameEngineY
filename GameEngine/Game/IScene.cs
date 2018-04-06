@@ -2,17 +2,29 @@
 using System.Collections.Generic;
 using GameEngine.Game.GameObjects;
 using GameEngine.Game.GameObjects.GameObjectComponents;
+using GameEngine.Math;
 
 namespace GameEngine.Game {
     public interface IScene {
 
+        /// <summary>
+        /// Creates a new GameObject and adds it to the scene.
+        /// </summary>
+        /// <param name="name">The name.</param>
+        /// <param name="parent">The parent.</param>
+        /// <param name="position">The position.</param>
+        /// <param name="rotation">The rotation.</param>
+        /// <param name="scale">The scale.</param>
+        /// <returns></returns>
+        IGameObject CreateGameObject(string name, IGameObject parent, Vector2 position, float rotation, Vector2 scale);
+        
         /// <summary>
         /// Gets all game objects in the scene.
         /// </summary>
         /// <value>
         /// The game objects.
         /// </value>
-        IEnumerable<GameObject> GameObjects { get; }
+        IEnumerable<IGameObject> GameObjects { get; }
 
         /// <summary>
         /// Finds the game objects by their name.
@@ -20,14 +32,14 @@ namespace GameEngine.Game {
         /// <param name="name">The name.</param>
         /// <param name="activeOnly">if set to <c>true</c> [active only].</param>
         /// <returns></returns>
-        IEnumerable<GameObject> FindGameObjectsByName(string name, bool activeOnly = true);
+        IEnumerable<IGameObject> FindGameObjectsByName(string name, bool activeOnly = true);
 
         /// <summary>
         /// Finds game objects using a selector.
         /// </summary>
         /// <param name="selector">The selector.</param>
         /// <returns></returns>
-        IEnumerable<GameObject> FindGameObjects(Func<GameObject, bool> selector);
+        IEnumerable<IGameObject> FindGameObjects(Func<IGameObject, bool> selector);
 
         /// <summary>
         /// Finds all game object components of a specific type.
@@ -52,5 +64,6 @@ namespace GameEngine.Game {
         /// The main viewport.
         /// </value>
         Viewport MainViewport { get; set; }
+
     }
 }

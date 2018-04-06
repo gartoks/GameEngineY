@@ -216,19 +216,19 @@ namespace GameEngine.Graphics {
             Handler.ApplyTransformation(transform);
         }
 
-        internal static void ApplyTranslation(float dx, float dy) {
-            Handler.ApplyTranslation(dx, dy);
-        }
+        //internal static void ApplyTranslation(float dx, float dy) {
+        //    Handler.ApplyTranslation(dx, dy);
+        //}
 
-        internal static void ApplyRotation(float angle) {
-            Handler.ApplyRotation(angle);
-        }
+        //internal static void ApplyRotation(float angle) {
+        //    Handler.ApplyRotation(angle);
+        //}
 
         //void ApplyRotation(float angle, float px, float py);
 
-        internal static void ApplyScaling(float sx, float sy) {
-            Handler.ApplyScaling(sx, sy);
-        }
+        //internal static void ApplyScaling(float sx, float sy) {
+        //    Handler.ApplyScaling(sx, sy);
+        //}
 
         internal static void RevertTransform() {
             Handler.RevertTransform();

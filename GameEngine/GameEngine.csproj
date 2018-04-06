@@ -49,9 +49,9 @@
     <Compile Include="Exceptions\RenderException.cs" />
     <Compile Include="Files\File.cs" />
     <Compile Include="Files\IFileManager.cs" />
-    <Compile Include="Game\GameObjects\GameObject.cs" />
     <Compile Include="Game\GameObjects\GameObjectComponents\GOC.cs" />
     <Compile Include="Game\GameObjects\GameObjectComponents\Viewport.cs" />
+    <Compile Include="Game\GameObjects\IGameObject.cs" />
     <Compile Include="Game\GameObjects\Transform.cs" />
     <Compile Include="Game\IScene.cs" />
     <Compile Include="Game\ISceneManager.cs" />

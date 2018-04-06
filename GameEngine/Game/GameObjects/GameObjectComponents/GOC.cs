@@ -1,8 +1,10 @@
-﻿using GameEngine.Graphics;
+﻿using System;
+using GameEngine.Graphics;
 
 namespace GameEngine.Game.GameObjects.GameObjectComponents {
     public abstract class GOC {
-        public GameObject GameObject { get; internal set; }
+
+        private readonly IGameObject gameObject;
 
         public bool IsEnabled;
 
@@ -20,9 +22,13 @@ namespace GameEngine.Game.GameObjects.GameObjectComponents {
 
         public virtual void Death() { }
 
-        internal virtual void Update() { }
+        protected virtual void Update() { }
 
-        public virtual Renderable Renderable => null;
+        private void Render() {
+            Renderable?.Render();
+        }
+
+        protected virtual Renderable Renderable => null;
 
         /// <summary>
         /// Returns true if this GOC is enabled, and its GameObject is enabled and alive.
@@ -30,8 +36,14 @@ namespace GameEngine.Game.GameObjects.GameObjectComponents {
         /// <value>
         ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
         /// </value>
-        internal bool IsActive => IsEnabled && GameObject.IsEnabled && GameObject.IsAlive;
+        public bool IsActive => IsEnabled && GameObject.IsEnabled && GameObject.IsAlive;
+
+        public IGameObject GameObject => this.gameObject;
 
         public Transform Transform => GameObject.Transform;
+
+        private Action GetUpdateMethod => Update;
+
+        private Action GetRenderMethod => Render;
     }
 }
