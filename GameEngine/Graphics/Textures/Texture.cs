@@ -4,7 +4,6 @@ using GameEngine.Graphics.RenderSettings;
 
 namespace GameEngine.Graphics.Textures {
     public abstract class Texture : IDisposable {
-
         private static Texture defaultTexture;
         internal static Texture DEFAULT_TEXTURE {
             get {

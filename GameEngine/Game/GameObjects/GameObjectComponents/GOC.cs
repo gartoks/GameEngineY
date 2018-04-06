@@ -18,7 +18,9 @@ namespace GameEngine.Game.GameObjects.GameObjectComponents {
 
         public virtual void Initialize() { }
 
-        public virtual void Initialize(object[] parameters) { }
+        public virtual void Initialize(object[] parameters) {
+            Initialize();
+        }
 
         public virtual void Death() { }
 

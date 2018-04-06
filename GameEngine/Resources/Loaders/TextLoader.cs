@@ -28,7 +28,6 @@ namespace GameEngine.Resources.Loaders {
     }
 
     public class TextLoader : ResourceLoader<string, TextLoadingParameters> {
-
         public override string Load(IEnumerable<string> filePaths, TextLoadingParameters loadingParameters) {
             string text;
             try {
