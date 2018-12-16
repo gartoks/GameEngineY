@@ -181,9 +181,14 @@ namespace GameEngine.Utility {
             return array;
         }
 
-        public float[] ToArray() {
-            return new float[] { r, g, b, a };
+        public float[] ToArray(bool includeAlpha) {
+            if (includeAlpha)
+                return new[] { r, g, b, a };
+            else
+                return new[] { r, g, b };
         }
+
+        public System.Drawing.Color ToWinColor => System.Drawing.Color.FromArgb(A, R, G, B);
 
         //public FloatBuffer getAsFloatBuffer() {
         //    return BufferUtils.createColorBuffer(this);
@@ -204,11 +209,16 @@ namespace GameEngine.Utility {
         //    return v < 0 ? 0 : (v > 1 ? 1 : v);
         //}
 
-        public static Color Lerp(Color c1, Color c2, float t) {
-            float a = c1.A * (1 - t) + c2.A * t;
-            float r = c1.R * (1 - t) + c2.R * t;
-            float g = c1.G * (1 - t) + c2.G * t;
-            float b = c1.B * (1 - t) + c2.B * t;
+        public static Color Lerp(Color c1, Color c2, float t, bool lerpAlpha = false) {
+            float a;
+            if (lerpAlpha)
+                a = c1.a * (1 - t) + c2.a * t;
+            else
+                a = 1;
+
+            float r = c1.r * (1 - t) + c2.r * t;
+            float g = c1.g * (1 - t) + c2.g * t;
+            float b = c1.b * (1 - t) + c2.b * t;
 
             return new Color(r, g, b, a);
         }

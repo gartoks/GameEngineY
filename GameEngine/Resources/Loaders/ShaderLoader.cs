@@ -1,13 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using GameEngine.Graphics;
 using GameEngine.Logging;
 
 namespace GameEngine.Resources.Loaders {
-    public class ShaderLoaderParameters : ResourceLoadingParameters<Shader> {
-        public ShaderLoaderParameters(IEnumerable<string> filePaths)
+    public class ShaderLoadingParameters : ResourceLoadingParameters<IShader> {
+        public ShaderLoadingParameters(IEnumerable<string> filePaths)
             : base(filePaths) {
 
             if (filePaths.Count() != 2) {
@@ -17,8 +16,8 @@ namespace GameEngine.Resources.Loaders {
         }
     }
 
-    public class ShaderLoader : ResourceLoader<Shader, ShaderLoaderParameters> {
-        public override Shader Load(IEnumerable<string> filePaths, ShaderLoaderParameters loadingParameters) {
+    public class ShaderLoader : ResourceLoader<IShader, ShaderLoadingParameters> {
+        public override IShader Load(IEnumerable<string> filePaths, ShaderLoadingParameters loadingParameters) {
             string vertexShaderFile = filePaths.ElementAt(0);
             string fragmentShaderFile = filePaths.ElementAt(1);
 
@@ -35,7 +34,7 @@ namespace GameEngine.Resources.Loaders {
             string vertexShaderSource = File.ReadAllText(vertexShaderFile);
             string fragmentShaderSource = File.ReadAllText(fragmentShaderFile);
 
-            return new Shader(vertexShaderSource, fragmentShaderSource);
+            return GraphicsHandler.CreateShader(vertexShaderSource, fragmentShaderSource);
         }
     }
 }

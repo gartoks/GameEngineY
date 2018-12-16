@@ -9,6 +9,8 @@ namespace GameApp.Graphics.Utility {
                     return OpenTK.Graphics.OpenGL.TextureWrapMode.Repeat;
                 case TextureWrapMode.Clamp:
                     return OpenTK.Graphics.OpenGL.TextureWrapMode.Clamp;
+                case TextureWrapMode.ClampToEdge:
+                    return OpenTK.Graphics.OpenGL.TextureWrapMode.ClampToEdge;
                 default:
                     throw new ArgumentException();
             }

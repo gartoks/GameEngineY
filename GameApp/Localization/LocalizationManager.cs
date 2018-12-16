@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using GameApp.Application;
@@ -74,7 +73,7 @@ namespace GameApp.Localization {
         /// </summary>
         /// <param name="language">The language to be loaded.</param>
         public void SetLanguage(string language) {
-            if (this.currentLanguage.Equals(language))
+            if (this.currentLanguage != null && this.currentLanguage.Equals(language))
                 return;
 
             if (string.IsNullOrEmpty(language)) {
@@ -101,6 +100,8 @@ namespace GameApp.Localization {
             get => this.currentLanguage;
             set => SetLanguage(value);
         }
+
+        internal void ReloadLanguage() => LoadLanguage(CurrentLanguage);
 
         /// <summary>
         /// Loads the language. Assumes the language exists.

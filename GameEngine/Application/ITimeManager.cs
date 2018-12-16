@@ -15,5 +15,7 @@
         /// The time since the application started.
         /// </value>
         float TimeSinceStart { get; }
+
+        int UpdatesPerSecond { get; }
     }
 }

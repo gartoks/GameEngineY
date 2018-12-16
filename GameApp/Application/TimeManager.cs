@@ -42,5 +42,7 @@ namespace GameApp.Application {
         public float DeltaTime => this.timeTracker.DeltaTime;
 
         public float TimeSinceStart => this.timeTracker.RunTimeSeconds();
+
+        public int UpdatesPerSecond => this.timeTracker.TicksPerSecond;
     }
 }

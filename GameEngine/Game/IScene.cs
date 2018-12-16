@@ -58,6 +58,14 @@ namespace GameEngine.Game {
         IEnumerable<T> FindComponentsByType<T>(bool activeOnly = true) where T : GOC;
 
         /// <summary>
+        /// Finds a game object component of a specific type.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="activeOnly">if set to <c>true</c> [active only].</param>
+        /// <returns></returns>
+        T FindComponentByType<T>(bool activeOnly = true) where T : GOC;
+
+        /// <summary>
         /// Gets the name of the scene.
         /// </summary>
         /// <value>

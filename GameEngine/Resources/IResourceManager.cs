@@ -20,7 +20,7 @@
         /// <param name="resourceLoadingParameters">The resource loading parameters.</param>
         /// <param name="loadingPriority">The loading priority.</param>
         /// <param name="globalResource">if set to <c>true</c> the resource is loaded as a global resource and not unloaded when the scene changes.</param>
-        void LoadResource<R, RLP>(string resourceIdentifier, RLP resourceLoadingParameters, int loadingPriority, bool globalResource = false) where RLP : ResourceLoadingParameters<R>;
+        void LoadResource<R, RLP>(string modID, string resourceIdentifier, RLP resourceLoadingParameters, int loadingPriority, bool globalResource = false) where RLP : ResourceLoadingParameters<R>;
 
         /// <summary>
         /// Unloads the resource.

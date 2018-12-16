@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
+using GameApp.Application;
+using GameApp.Modding;
 using GameEngine.Logging;
 using GameEngine.Resources;
 using GameEngine.Resources.Loaders;
@@ -47,7 +51,10 @@ namespace GameApp.Resources {
 
         internal void Initialize() {
             RegisterResourceLoader(new TextLoader());
-
+            RegisterResourceLoader(new TextureLoader());
+            RegisterResourceLoader(new ShaderLoader());
+            RegisterResourceLoader(new TextureAtlasLoader());
+            RegisterResourceLoader(new FontLoader());
         }
 
         internal void ContinueLoading() {
@@ -106,7 +113,49 @@ namespace GameApp.Resources {
             return true;
         }
 
-        public void LoadResource<R, RLP>(string resourceIdentifier, RLP resourceLoadingParameters, int loadingPriority, bool globalResource = false) where RLP : ResourceLoadingParameters<R> {
+        public void LoadResource<R, RLP>(string modID, string resourceIdentifier, RLP resourceLoadingParameters, int loadingPriority, bool globalResource = false) where RLP : ResourceLoadingParameters<R> {
+            if (string.IsNullOrWhiteSpace(modID) || ModManager.Instance.IsModLoaded(modID)) {
+                Log.WriteLine($"Could not load resource '{resourceIdentifier}' from mod '{modID}'. Mod does not exist.", LogType.Error);
+                return;
+            }
+
+            if (this.queuedResources.ContainsKey(resourceIdentifier)) {
+                Log.WriteLine($"Resource with identifier '{resourceIdentifier}' is already queued for loading.", LogType.Error);
+                return;
+            }
+
+            FieldInfo pathsInfo = null;
+            Type baseLoadingParametersType = resourceLoadingParameters.GetType().BaseType;
+            while ((pathsInfo = baseLoadingParametersType.GetField("FilePaths", BindingFlags.Instance | BindingFlags.Public)) == null)
+                baseLoadingParametersType = baseLoadingParametersType.BaseType;
+
+            IEnumerable<string> rawPaths = resourceLoadingParameters.FilePaths;
+            string[] newPaths = new string[rawPaths.Count()];
+            int i = 0;
+            foreach (string rawPath in rawPaths) {
+                newPaths[i] = Path.Combine(AppConstants.Directories.MODS, modID, rawPath);
+                i++;
+            }
+
+            pathsInfo.SetValue(resourceLoadingParameters, newPaths);
+
+            ResourceLoadingTask loadingTask = new ResourceLoadingTask(resourceIdentifier, typeof(RLP), resourceLoadingParameters, typeof(R), globalResource);
+            if (!this.loadingQueue.ContainsKey(loadingPriority))
+                this.loadingQueue.Add(loadingPriority, new Queue<ResourceLoadingTask>());
+
+            Queue<ResourceLoadingTask> queue = this.loadingQueue[loadingPriority];
+
+            int hPrio = Math.Max(loadingPriority, this.loadingQueue.Max(x => x.Value.Count == 0 ? int.MinValue : x.Key));
+            lock (this.loadingQueue) {
+                queue.Enqueue(loadingTask);
+                this.loadingQueueSize++;
+                this.queuedResources[resourceIdentifier] = null;
+
+                this.highestPriority = hPrio;
+            }
+        }
+
+        internal void LoadResource<R, RLP>(string resourceIdentifier, RLP resourceLoadingParameters, int loadingPriority, bool globalResource = false) where RLP : ResourceLoadingParameters<R> {
             if (this.queuedResources.ContainsKey(resourceIdentifier)) {
                 Log.WriteLine($"Resource with identifier '{resourceIdentifier}' is already queued for loading.", LogType.Error);
                 return;

@@ -61,6 +61,9 @@ namespace GameApp.Settings {
         }
 
         internal void LoadModSettings(ModBase mod) {
+            if (mod.SettingsFile == null)
+                return;
+
             string modID = mod.ModID;
             string modSettingsFile = Path.Combine(FileManager.Instance.ModDirectory(mod), mod.SettingsFile);
 

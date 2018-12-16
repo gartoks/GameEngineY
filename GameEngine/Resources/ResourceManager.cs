@@ -21,7 +21,7 @@ namespace GameEngine.Resources {
         /// <param name="resourceLoadingParameters">The resource loading parameters.</param>
         /// <param name="loadingPriority">The loading priority.</param>
         /// <param name="globalResource">if set to <c>true</c> the resource is loaded as a global resource and not unloaded when the scene changes.</param>
-        public static void LoadResource<R, RLP>(string resourceIdentifier, RLP resourceLoadingParameters, int loadingPriority, bool globalResource = false) where RLP : ResourceLoadingParameters<R> => ModBase.ResourceManager.LoadResource<R, RLP>(resourceIdentifier, resourceLoadingParameters, loadingPriority, globalResource);
+        public static void LoadResource<R, RLP>(string resourceIdentifier, RLP resourceLoadingParameters, int loadingPriority, bool globalResource = false) where RLP : ResourceLoadingParameters<R> => ModBase.ResourceManager.LoadResource<R, RLP>(ModBase.Instance.ModID, resourceIdentifier, resourceLoadingParameters, loadingPriority, globalResource);
 
         /// <summary>
         /// Unloads the resource.

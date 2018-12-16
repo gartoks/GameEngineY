@@ -11,8 +11,12 @@ using GameApp.Settings;
 using GameApp.Utility;
 using GameEngine.Application;
 using GameEngine.Exceptions;
+using GameEngine.Logging;
+using GameEngine.Utility.Extensions;
 using Log = GameApp.Logging.Log;
 using Version = GameEngine.Utility.Version;
+// ReSharper disable ObjectCreationAsStatement
+// ReSharper disable EmptyGeneralCatchClause
 
 namespace GameApp.Application {
     public sealed class Application : IApplication {
@@ -30,19 +34,24 @@ namespace GameApp.Application {
 
         private readonly ApplicationInitializationSettings initializationSettings;
 
+        public string BaseModID => initializationSettings.BaseModID;
         public string Name => initializationSettings.Name;
         public Version Version => initializationSettings.Version;
 
-        private bool running = false;
+        private bool running;
         internal Thread UpdateThread { get; private set; }
         private Thread resourceThread;
+        internal Thread RenderThread => Window.Window.Instance.RenderThread;
 
         public Application(ApplicationInitializationSettings initializationSettings) {
             Instance = this;
 
             this.initializationSettings = initializationSettings ?? throw new ArgumentNullException(nameof(initializationSettings));
 
+            ConsoleActivator.ShowConsole = initializationSettings.ShowConsole;
+
             new Log();
+            Log.Instance.OnLog += (text, type, color) => Console.WriteLine($"{(type == LogType.Message ? "" : "[" + type.ToString().PadBoth(7) + "]")}" + $"{text}");
 
             SetupManagers();
         }
@@ -50,10 +59,12 @@ namespace GameApp.Application {
         public void Launch() {
             if (!IsInstalled)
                 Install();
-            else if (!VerifyInstallation())
+            else
+                Initialize();
+
+            if (!VerifyInstallation())
                 throw new ProgramException("App installation is corrupt. Reinstall app.");
 
-            Initialize();
 
             Application.Instance.resourceThread = new Thread(ResourceLoop);
             Application.instance.resourceThread.Name = "ResourceThread";
@@ -62,9 +73,9 @@ namespace GameApp.Application {
 
             Application.Instance.running = true;
 
-            Window.Window.Instance.Show();
             Application.Instance.resourceThread.Start();
             Application.Instance.UpdateThread.Start();
+            Window.Window.Instance.Show();
         }
 
         public void Shutdown() {
@@ -89,6 +100,7 @@ namespace GameApp.Application {
             new LocalizationManager();
             new Window.Window();
             new GLHandler();
+            new GraphicsHandler();
             new InputManager();
             new TimeManager();
             new SceneManager();
@@ -96,8 +108,6 @@ namespace GameApp.Application {
         }
 
         private static void Install() {
-            //SettingsManager.Instance.InstallSetting(AppConstants.SettingKeys.APP_UPDATE_RATE, 60, x => x.ToString(), true, false);
-            //SettingsManager.Instance.InstallSetting(AppConstants.SettingKeys.APP_RENDER_RATE, 0, x => x.ToString(), true, false);
             ApplicationInitializationSettings initializationSettings = Instance.initializationSettings;
 
             FileManager.Instance.Install();
@@ -113,10 +123,13 @@ namespace GameApp.Application {
             LocalizationManager.Instance.Initialize(initializationSettings.DefaultLanguage);
 
             Window.Window.Instance.Install();
-            Window.Window.Instance.Initialize(initializationSettings.Icon);
+            Window.Window.Instance.Initialize(initializationSettings.Name, initializationSettings.Icon);
 
             GLHandler.Instance.Install();
             GLHandler.Instance.Initialize();
+
+            GraphicsHandler.Instance.Install();
+            GraphicsHandler.Instance.Initialize();
 
             InputManager.Instance.Install();
             InputManager.Instance.Initialize();
@@ -141,6 +154,7 @@ namespace GameApp.Application {
                 LocalizationManager.Instance.VerifyInstallation() &&
                 Window.Window.Instance.VerifyInstallation() &&
                 GLHandler.Instance.VerifyInstallation() &&
+                GraphicsHandler.Instance.VerifyInstallation() &&
                 InputManager.Instance.VerifyInstallation() &&
                 TimeManager.Instance.VerifyInstallation() &&
                 SceneManager.Instance.VerifyInstallation() &&
@@ -154,8 +168,9 @@ namespace GameApp.Application {
             SettingsManager.Instance.Initialize();
             LocalizationManager.Instance.Initialize(initializationSettings.DefaultLanguage);
             ResourceManager.Instance.Initialize();
-            Window.Window.Instance.Initialize(initializationSettings.Icon);
+            Window.Window.Instance.Initialize(initializationSettings.Name, initializationSettings.Icon);
             GLHandler.Instance.Initialize();
+            GraphicsHandler.Instance.Initialize();
             InputManager.Instance.Initialize();
             TimeManager.Instance.Initialize(initializationSettings.IsSimulation);
             SceneManager.Instance.Initialize();
@@ -163,6 +178,10 @@ namespace GameApp.Application {
         }
 
         private static void UpdateLoop() {
+            ModManager.Instance.InitializeMods();
+
+            SceneManager.Instance.TryLoadDefaultScene();
+
             while (Application.Instance.running) {
                 TimeManager.Instance.Tick(() => {
                     InputManager.Instance.Update();

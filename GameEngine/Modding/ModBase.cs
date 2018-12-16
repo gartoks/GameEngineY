@@ -15,7 +15,7 @@ using GameEngine.Window;
 
 namespace GameEngine.Modding {
     /// <summary>
-    /// Every mod has to have exactly one class in the default namespace named 'Mod' extending from this class.
+    /// Every mod has to have exactly one class in the namespace called the same as 'Name' named 'Mod' extending from this class.
     /// </summary>
     public abstract class ModBase {
 
@@ -41,7 +41,7 @@ namespace GameEngine.Modding {
         private IResourceManager resourceManager;
         private ILocalizationManager localizationManager;
         private IWindow window;
-        private IGLHandler glHandler;
+        private IGraphicsHandler graphicsHandler;
         private IInputManager inputManager;
         private ITimeManager timeManager;
         private ISceneManager sceneManager;
@@ -59,8 +59,10 @@ namespace GameEngine.Modding {
         public void OnLoad(bool isBaseMod,
             IApplication app, ILog log, IFileManager fileManager, ISettingsManager settingsManager,
             IResourceManager resourceManager, ILocalizationManager localizationManager, IWindow window,
-            IGLHandler glHandler, IInputManager inputManager, ITimeManager timeManager,
+            IGraphicsHandler graphicsHandler, IInputManager inputManager, ITimeManager timeManager,
             ISceneManager sceneManager, IModManager modManager) {
+
+            log.OnLog += Logging.Log.InvokeEvent;
 
             if (this.loaded) {
                 log.WriteLine(this, $"Mod '{ModID}' is already loaded.", LogType.Warning);
@@ -78,12 +80,14 @@ namespace GameEngine.Modding {
             this.resourceManager = resourceManager;
             this.localizationManager = localizationManager;
             this.window = window;
-            this.glHandler = glHandler;
+            this.graphicsHandler = graphicsHandler;
             this.inputManager = inputManager;
             this.timeManager = timeManager;
             this.sceneManager = sceneManager;
             this.modManager = modManager;
         }
+
+        public void Shutdown() => App.Shutdown();
 
         /// <summary>
         /// Sets a custom mod data.
@@ -116,6 +120,14 @@ namespace GameEngine.Modding {
         ///     if there is none.
         /// </value>
         public IEnumerable<(string key, object data)> CustomModData => this.customModData.Select(pair => pair.ToTuple());
+
+        /// <summary>
+        /// Gets the mod's directory.
+        /// </summary>
+        /// <value>
+        /// The mod directory.
+        /// </value>
+        public string ModDirectory => FileManager.ModDirectory(this);
 
         /// <summary>
         /// Gets the app.
@@ -211,7 +223,7 @@ namespace GameEngine.Modding {
         /// <value>
         /// The OpenGL handler.
         /// </value>
-        internal static IGLHandler GlHandler => Instance.glHandler;
+        internal static IGraphicsHandler GraphicsHandler => Instance.graphicsHandler;
 
         /// <summary>
         /// This method should be used to check for required files,

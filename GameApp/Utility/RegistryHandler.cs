@@ -13,10 +13,12 @@ namespace GameApp.Utility {
                 Uninstall(appName, version);
 
             if (!IsInstalled(appName))
-                MainKey.CreateSubKey(appName);
+                MainKey.CreateSubKey(appName + "\\" + "Version_" + version.ToVersionString());
 
-            if (!IsInstalled(appName, version))
-                AppKey(appName).CreateSubKey(version.ToVersionString());
+            //if (!IsInstalled(appName, version)) {
+            //    RegistryKey registryKey = AppKey(appName);
+            //    AppKey(appName).CreateSubKey("Version_" + version.ToVersionString()); // TODO!!!!
+            //}
         }
 
         internal static void Uninstall(string appName) {
@@ -34,7 +36,7 @@ namespace GameApp.Utility {
             if (!IsInstalled(appName, version))
                 return;
 
-            AppKey(appName).DeleteSubKeyTree(version.ToVersionString());
+            AppKey(appName).DeleteSubKeyTree("Version_" + version.ToVersionString());
         }
 
         internal static void SetValue(string appName, Version version, string key, object value) {
@@ -78,7 +80,7 @@ namespace GameApp.Utility {
         internal static bool IsInstalled(string appName, Version version) {
             CheckParameterValidity(appName, version);
 
-            return IsInstalled(appName) && AppKey(appName).GetSubKeyNames().Contains(version.ToVersionString());
+            return IsInstalled(appName) && AppKey(appName).GetSubKeyNames().Contains("Version_" + version.ToVersionString());
         }
 
         private static RegistryKey MainKey => Registry.CurrentUser.OpenSubKey("Software", true);
@@ -92,7 +94,7 @@ namespace GameApp.Utility {
         private static RegistryKey VersionKey(string appName, Version version) {
             CheckParameterValidity(appName, version);
 
-            return AppKey(appName).OpenSubKey(version.ToVersionString());
+            return AppKey(appName).OpenSubKey("Version_" + version.ToVersionString());
         }
 
         private static void CheckParameterValidity(string appName) {

@@ -33,12 +33,32 @@ namespace GameEngine.Graphics.Utility {
             return m;
         }
 
+        public static Matrix4 MakeReverseOrthographicProjection(this Matrix4 m, float left, float right, float bottom, float top, float near, float far) {
+            m.MakeIdentity();
+
+            float v00 = (right - left) / 2f;
+            float v11 = (top - bottom) / 2f;
+            float v22 = (far - near) / -2f;
+            float v03 = (right + left) / 2f;
+            float v13 = (top + bottom) / 2f;
+            float v23 = (far + near) / 2f;
+
+            m.SetColumnMajor(v00, 0, 0);
+            m.SetColumnMajor(v11, 1, 1);
+            m.SetColumnMajor(v22, 2, 2);
+            m.SetColumnMajor(v03, 0, 3);
+            m.SetColumnMajor(v13, 1, 3);
+            m.SetColumnMajor(v23, 2, 3);
+
+            return m;
+        }
+
         public static Matrix4 MakePerspectiveProjection(this Matrix4 m, float fovInRad, float aspectRatio, float near, float far) {
             m.MakeIdentity();
 
             float tan2 = (float)System.Math.Tan(fovInRad / 2.0);
+            float v00 = 1f / (aspectRatio * tan2);
             float v11 = 1f / tan2;
-            float v00 = v11 / aspectRatio;
             float v22 = (-near - far) / (near - far);
             float v23 = (2 * far * near) / (near - far);
 
@@ -213,7 +233,7 @@ namespace GameEngine.Graphics.Utility {
         #endregion Rotation
 
         #region Scale
-        public static Matrix4 MakeScaling(this Matrix4 m, Vector2 v) => MakeTranslation(m, v.x, v.y);
+        public static Matrix4 MakeScaling(this Matrix4 m, Vector2 v) => MakeScaling(m, v.x, v.y);
         public static Matrix4 MakeScaling(this Matrix4 m, float x, float y) {
             m.MakeIdentity();
 
@@ -224,7 +244,7 @@ namespace GameEngine.Graphics.Utility {
             return m;
         }
 
-        public static Matrix4 MakeScaling(this Matrix4 m, Vector3 v) => MakeTranslation(m, v.x, v.y, v.z);
+        public static Matrix4 MakeScaling(this Matrix4 m, Vector3 v) => MakeScaling(m, v.x, v.y, v.z);
         public static Matrix4 MakeScaling(this Matrix4 m, float x, float y, float z) {
             m.MakeIdentity();
 
@@ -235,32 +255,32 @@ namespace GameEngine.Graphics.Utility {
             return m;
         }
 
-        public static Matrix4 Scale(this Matrix4 m, Vector2 v) => Translate(m, v.x, v.y);
+        public static Matrix4 Scale(this Matrix4 m, Vector2 v) => Scale(m, v.x, v.y);
         public static Matrix4 Scale(this Matrix4 m, float x, float y) {
             return m.MultiplyLeft(Matrix4.CreateIdentity().MakeScaling(x, y));
         }
 
-        public static Matrix4 Scale(this Matrix4 m, Vector3 v) => Translate(m, v.x, v.y, v.z);
+        public static Matrix4 Scale(this Matrix4 m, Vector3 v) => Scale(m, v.x, v.y, v.z);
         public static Matrix4 Scale(this Matrix4 m, float x, float y, float z) {
             return m.MultiplyLeft(Matrix4.CreateIdentity().MakeScaling(x, y, z));
         }
         #endregion Scale
 
         #region Combined
-        public static Matrix4 MakeTransformation(this Matrix4 m, Vector2 t, float angleInRad, bool clockwise, Vector2 s) => MakeTransformation(m, t.x, t.y, angleInRad, clockwise, s.x, s.y);
-        public static Matrix4 MakeTransformation(this Matrix4 m, float dx, float dy, float angleInRad, bool clockwise, float sx, float sy) {
+        public static Matrix4 MakeTransformation(this Matrix4 m, Vector2 position, float z, float angleInRad, bool clockwise, Vector2 scale) => MakeTransformation(m, position.x, position.y, z, angleInRad, clockwise, scale.x, scale.y);
+        public static Matrix4 MakeTransformation(this Matrix4 m, float dx, float dy, float dz, float angleInRad, bool clockwise, float sx, float sy) {
             m.MakeIdentity();
 
             m.Scale(sx, sy);
             m.RotateZ(angleInRad, clockwise);
-            m.Translate(dx, dy);
+            m.Translate(dx, dy, dz);
 
             return m;
         }
 
-        public static Matrix4 Transform(this Matrix4 m, Vector2 t, float angleInRad, bool clockwise, Vector2 s) => Transform(m, t.x, t.y, angleInRad, clockwise, s.x, s.y);
-        public static Matrix4 Transform(this Matrix4 m, float dx, float dy, float angleInRad, bool clockwise, float sx, float sy) {
-            return m.MultiplyLeft(Matrix4.CreateIdentity().MakeTransformation(dx, dy, angleInRad, clockwise, sx, sy));
+        public static Matrix4 Transform(this Matrix4 m, Vector2 position, float z, float angleInRad, bool clockwise, Vector2 scale) => Transform(m, position.x, position.y, z, angleInRad, clockwise, scale.x, scale.y);
+        public static Matrix4 Transform(this Matrix4 m, float dx, float dy, float dz, float angleInRad, bool clockwise, float sx, float sy) {
+            return m.MultiplyLeft(Matrix4.CreateIdentity().MakeTransformation(dx, dy, dz, angleInRad, clockwise, sx, sy));
         }
         #endregion Combined
         #endregion Transformations

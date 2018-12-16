@@ -1,6 +1,7 @@
 ﻿using System;
 using GameApp.Application;
 using GameApp.Graphics;
+using GameApp.Resources;
 using GameEngine.Game;
 using GameEngine.Modding;
 
@@ -24,15 +25,20 @@ namespace GameApp.Game {
         internal bool VerifyInstallation() => true;
 
         internal void Initialize() {
-            Window.Window.Instance.GameWindow.Load += (sender, args) => Start();
             Window.Window.Instance.GameWindow.RenderFrame += (sender, args) => Render();
         }
 
-        private void Start() => LoadScene(AppConstants.Defaults.SCENE_DEFAULT_SCENE_NAME);
+        internal void TryLoadDefaultScene() {
+            if (this.scene == null)
+                LoadScene(AppConstants.Defaults.SCENE_DEFAULT_SCENE_NAME);
+        }
 
         internal void Update() => this.scene.Update();
 
         private void Render() {
+            if (this.scene == null)
+                return;
+
             GLHandler.Instance.BeginRendering();
 
             this.scene.Render();
@@ -44,6 +50,8 @@ namespace GameApp.Game {
             this.scene = new Scene(sceneName);
             // TODO load scene data
 
+            ResourceManager.Instance.ClearSceneResources();
+
             Modding.ModManager.Instance.BaseMod.OnSceneLoad(sceneName);
             foreach (string modID in Modding.ModManager.Instance.InstalledMods) {
                 ModBase mod = Modding.ModManager.Instance.GetMod(modID);
@@ -51,6 +59,8 @@ namespace GameApp.Game {
                 mod.OnSceneLoad(sceneName);
             }
         }
+
+        internal Scene RawActiveScene => this.scene;
 
         public IScene ActiveScene => this.scene;
     }

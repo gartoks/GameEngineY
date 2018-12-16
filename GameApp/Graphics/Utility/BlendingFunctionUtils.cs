@@ -60,7 +60,7 @@ namespace GameApp.Graphics.Utility {
                     throw new ArgumentException();
             }
 
-            switch (functions.source) {
+            switch (functions.destination) {
                 case BlendFunction.Zero:
                     destination = BlendingFactorDest.Zero;
                     break;

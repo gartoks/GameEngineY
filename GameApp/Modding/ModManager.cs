@@ -38,7 +38,7 @@ namespace GameApp.Modding {
 
         internal void Install() { }
 
-        internal bool VerifyInstallation() => File.Exists(Path.Combine(FileManager.Instance.ModsPath, Application.Application.Instance.Name, AppConstants.Files.MOD));
+        internal bool VerifyInstallation() => File.Exists(Path.Combine(FileManager.Instance.ModsPath, Application.Application.Instance.BaseModID, AppConstants.Files.MOD));
 
         internal void Initialize() {
             LoadMods();
@@ -47,7 +47,7 @@ namespace GameApp.Modding {
         private void LoadMods() {
             string modsDirectoryPath = FileManager.Instance.ModsPath;
 
-            string baseModDirectory = Path.Combine(modsDirectoryPath, Application.Application.Instance.Name);
+            string baseModDirectory = Path.Combine(modsDirectoryPath, Application.Application.Instance.BaseModID);
             LoadMod(baseModDirectory, true);
 
             foreach (string modDirectory in Directory.EnumerateDirectories(modsDirectoryPath)) {
@@ -58,8 +58,9 @@ namespace GameApp.Modding {
             }
 
             this.installedMods = this.installedMods.OrderBy(kv => kv.Key).ToDictionary(item => item.Key, item => item.Value);
+        }
 
-            // init
+        internal void InitializeMods() {
             BaseMod.Initialize();
 
             foreach (ModBase mod in Mods) {
@@ -83,7 +84,7 @@ namespace GameApp.Modding {
                     return;
                 }
 
-                Type type = assembly.GetType(MOD_ENTRY_CLASS_NAME);
+                Type type = assembly.GetType(Application.Application.Instance.Name + "." + MOD_ENTRY_CLASS_NAME);
 
                 if (type == null) {
                     Log.Instance.WriteLine($"Could not find '{MOD_ENTRY_CLASS_NAME}' class in default namespace for '{assemblyFile}'.", LogType.Error);
@@ -92,16 +93,16 @@ namespace GameApp.Modding {
 
                 ModBase mod = (ModBase)Activator.CreateInstance(type);
 
+                // not the base mod
+                if (mod.ModID.Length < MOD_ID_MIN_LENGTH || char.ToLower(mod.ModID[0]) < 'a' || char.ToLower(mod.ModID[0]) > 'z') {
+                    Log.Instance.WriteLine($"Invalid mod id: '{mod.ModID}'. Must be at least {MOD_ID_MIN_LENGTH} characters long and begin with a letter (a-z, A-Z).", LogType.Error);
+                    return;
+                }
+
                 if (isBaseMod) {
                     // base mod
                     this.baseMod = new Tuple<ModBase, string>(mod, modDirectory);
                 } else {
-                    // not the base mod
-                    if (mod.ModID.Length < MOD_ID_MIN_LENGTH || char.ToLower(mod.ModID[0]) < 'a' || char.ToLower(mod.ModID[0]) > 'z') {
-                        Log.Instance.WriteLine($"Invalid mod id: '{mod.ModID}'. Must be at least {MOD_ID_MIN_LENGTH} characters long and begin with a letter (a-z, A-Z).", LogType.Error);
-                        return;
-                    }
-
                     if (this.installedMods.ContainsKey(mod.ModID)) {
                         Log.Instance.WriteLine($"Mod with id '{mod.ModID}' already exists.", LogType.Error);
                         return;
@@ -120,7 +121,9 @@ namespace GameApp.Modding {
                     this.modPriorities[mod.ModLoadingPriority].Add(mod);
                 }
 
+                LocalizationManager.Instance.ReloadLanguage();
                 SettingsManager.Instance.LoadModSettings(mod);
+
 
                 mod.OnLoad(isBaseMod,
                     Application.Application.Instance,
@@ -130,12 +133,11 @@ namespace GameApp.Modding {
                     ResourceManager.Instance,
                     LocalizationManager.Instance,
                     Window.Window.Instance,
-                    GLHandler.Instance,
+                    GraphicsHandler.Instance,
                     InputManager.Instance,
                     TimeManager.Instance,
                     SceneManager.Instance,
                     ModManager.instance);
-
             } catch (Exception e) {
                 Log.Instance.WriteLine($"Could not load mod '{modDirectory}'.", LogType.Error);
                 Log.Instance.WriteLine(e.ToString(), LogType.Error);

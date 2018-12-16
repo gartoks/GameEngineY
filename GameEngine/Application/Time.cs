@@ -19,5 +19,13 @@ namespace GameEngine.Application {
         /// </value>
         public static float TimeSinceStart => ModBase.TimeManager.TimeSinceStart;
 
+        /// <summary>
+        /// Gets the updates per second.
+        /// </summary>
+        /// <value>
+        /// The updates per second.
+        /// </value>
+        public static int UpdatesPerSecond => ModBase.TimeManager.UpdatesPerSecond;
+
     }
 }

@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 
 namespace GameEngine.Resources {
     public interface IResourceLoader {
@@ -20,8 +19,8 @@ namespace GameEngine.Resources {
             return LoadResource(resourceIdentifier, (RLP)loadingParameters);
         }
 
-        public IEnumerable<Resource<R>> LoadResourceBatch(IEnumerable<(string resourceIdentifier, RLP lP)> loadingData) {
-            return loadingData.Select(l => LoadResource(l.resourceIdentifier, l.lP)).ToList();
-        }
+        //public IEnumerable<Resource<R>> LoadResourceBatch(IEnumerable<(string resourceIdentifier, RLP lP)> loadingData) { // TODO
+        //    return loadingData.Select(l => LoadResource(l.resourceIdentifier, l.lP)).ToList();
+        //}
     }
 }

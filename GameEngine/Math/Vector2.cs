@@ -11,6 +11,8 @@ namespace GameEngine.Math {
 
         private float? length;
 
+        internal Action<Vector2> OnChange;
+
         public Vector2()
             : this(0, 0) {
         }
@@ -155,6 +157,8 @@ namespace GameEngine.Math {
                 _y = value.y;
 
                 length = null;
+
+                OnChange?.Invoke(this);
             }
         }
 

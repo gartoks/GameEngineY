@@ -5,12 +5,14 @@ using System.Drawing.Imaging;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using GameApp.Graphics.Buffers;
+using GameApp.Graphics.Textures;
 using GameApp.Graphics.Utility;
 using GameEngine.Exceptions;
 using GameEngine.Game.GameObjects;
-using GameEngine.Graphics;
 using GameEngine.Graphics.RenderSettings;
-using GameEngine.Graphics.Textures;
 using GameEngine.Graphics.Utility;
 using GameEngine.Logging;
 using GameEngine.Math;
@@ -18,29 +20,31 @@ using GameEngine.Utility.DataStructures;
 using OpenTK.Graphics.OpenGL;
 using Color = GameEngine.Utility.Color;
 using Log = GameApp.Logging.Log;
+using TextureWrapMode = GameEngine.Graphics.RenderSettings.TextureWrapMode;
+
+// ReSharper disable PossibleNullReferenceException
 
 namespace GameApp.Graphics {
-    internal class GLHandler : IGLHandler {   // TODO stencil
-
+    internal sealed class GLHandler {   // TODO stencil
         private static GLHandler instance;
         internal static GLHandler Instance {
             get => GLHandler.instance;
             private set { if (GLHandler.instance != null) throw new InvalidOperationException("Only one instance per manager type permitted."); else instance = value; }
         }
 
+        private Thread renderThread;
+
         private Color clearColor;
         private ClearBufferMask clearBufferMask;
 
-        public bool IsRendering { get; private set; }
+        internal bool IsRendering { get; private set; }
         //private Renderer renderer;
 
         private readonly Stack<Matrix4> transformStack;
         private readonly ObjectPool<Matrix4> matrixPool;
 
-
-        public int ActiveTextureUnit { get; private set; }
-        private Texture[] boundTextures;
-        private int availableTextureUnits;
+        private Texture[] assignedTextures;
+        private Dictionary<Texture, int> assignedTextureUnits;
 
         private Shader boundShader;
 
@@ -54,18 +58,21 @@ namespace GameApp.Graphics {
         private GameEngine.Graphics.RenderSettings.DepthFunction? depthFunction;
         private AntiAliasMode antiAliasMode;
 
-        public GLHandler() {
+        private Queue<Task> glTaskQueue;
+        private Queue<Task> glTaskQueue_swap;
+
+        internal GLHandler() {
             Instance = this;
 
             this.transformStack = new Stack<Matrix4>();
             this.matrixPool = new ObjectPool<Matrix4>(Matrix4.CreateIdentity, m => { m.MakeIdentity(); return m; });
 
+            this.glTaskQueue = new Queue<Task>();
+            this.glTaskQueue_swap = new Queue<Task>();
+
             IsRendering = false;
             //this.renderer = null;
 
-            ActiveTextureUnit = -1;
-            boundTextures = null;
-            availableTextureUnits = -1;
             supportedTextureUnits = -1;
         }
 
@@ -74,32 +81,61 @@ namespace GameApp.Graphics {
         internal bool VerifyInstallation() => true;
 
         internal void Initialize() {
-            EnableTextures = true;
-
             EnableBlending = true;
             BlendMode = BlendMode.Default;
 
             EnableDepthTest = true;
             DepthFunction = GameEngine.Graphics.RenderSettings.DepthFunction.Less;
 
-            EnableColors(true, true, true, true);
+            //EnableColors(true, true, true, true);
 
-            EnableEdgeAntialiasing = true;
-            AntiAliasMode = AntiAliasMode.Fastest;
+            //EnableEdgeAntialiasing = true;
+            //AntiAliasMode = AntiAliasMode.Fastest;
 
             EnableCulling = true;
-            ClockwiseCulling = false;
+            ClockwiseCulling = true;
             CullFaces(false, true);
 
             ClearColor = Color.BLACK;
             SetClearModes(true, true, false);
+
+            this.assignedTextures = new Texture[SupportedTextureUnits];
+            this.assignedTextureUnits = new Dictionary<Texture, int>();
+        }
+
+        internal void Queue(Task glTask) {
+            lock (this.glTaskQueue) {
+                this.glTaskQueue.Enqueue(glTask);
+            }
         }
 
         internal void BeginRendering() {
+            if (this.renderThread == null)
+                this.renderThread = Thread.CurrentThread;
+
+            if (this.supportedTextureUnits == -1)
+                this.supportedTextureUnits = GL.GetInteger(GetPName.MaxTextureUnits);
+
+            lock (this.glTaskQueue) {
+                Queue<Task> tmp = glTaskQueue;
+                glTaskQueue = glTaskQueue_swap;
+                glTaskQueue_swap = tmp;
+            }
+
+            foreach (Task glTask in glTaskQueue_swap)
+                glTask.RunSynchronously();
+            glTaskQueue_swap.Clear();
+
             this.transformStack.Clear();
 
-            GL.ClearDepth(1f);  // TODO maybe allow different values
+            //GL.ClearDepth(1f);  // TODO maybe allow different values
             GL.Clear(this.clearBufferMask);
+
+            //EnableBlending = true;
+            //BlendMode = BlendMode.Default;
+
+            //EnableDepthTest = true;
+            //DepthFunction = GameEngine.Graphics.RenderSettings.DepthFunction.Less;
 
             //Viewport viewport = Game.Instance.Viewport;
             //GL.MatrixMode(MatrixMode.Projection);
@@ -111,7 +147,7 @@ namespace GameApp.Graphics {
         internal void EndRendering() {
             IsRendering = false;
 
-            //GL.Flush();
+            GL.Flush();
 
             Window.Window.Instance.SwapBuffers();   // un-nice
 
@@ -120,93 +156,93 @@ namespace GameApp.Graphics {
             }
         }
 
-        public void Render(IndexBufferObject ibo) {
+        internal void Render(IndexBufferObject ibo) {
             BindIBO(ibo);
-            GL.DrawElements(PrimitiveType.Triangles, ibo.Data.Count() / 3, DrawElementsType.UnsignedInt, 0);
+            GL.DrawElements(PrimitiveType.Triangles, ibo.Size, DrawElementsType.UnsignedInt, 0);
             ReleaseIBO(ibo);
         }
 
         #region VertexArrayObjects
-        public void InitializeVAO(Renderable vao) {
-            FieldInfo vaoIDFI = vao.GetType().GetField("vaoID", BindingFlags.NonPublic | BindingFlags.Instance);
+        //internal int CreateVAO() {
+        //    return GL.GenVertexArray();
+        //}
 
-            int vaoID = GL.GenVertexArray();
+        //internal void BindVAO(Renderable vao) {
+        //    if (IsVAOBound(vao))
+        //        return;
 
-            vaoIDFI.SetValue(vao, vaoID);
-        }
+        //    if (vao.IsDisposed) {
+        //        Log.Instance.WriteLine("Cannot bind vertex array object. It is disposed.", LogType.Error);
+        //        return;
+        //    }
 
-        public void BindVAO(Renderable vao) {
-            if (IsVAOBound(vao))
-                return;
+        //    int vaoID = GetVAOID(vao);
 
-            if (vao.IsDisposed) {
-                Log.Instance.WriteLine("Cannot bind vertex array object. It is disposed.", LogType.Error);
-                return;
-            }
+        //    GL.BindVertexArray(vaoID);
+        //    this.boundVertexArrayObject = vao;
+        //}
 
-            int vaoID = GetVAOID(vao);
+        //internal void ReleaseVAO(Renderable vao) {
+        //    if (!IsVAOBound(vao))
+        //        return;
 
-            GL.BindVertexArray(vaoID);
-            this.boundVertexArrayObject = vao;
-        }
+        //    if (vao.IsDisposed) {
+        //        Log.Instance.WriteLine("Cannot release vertex array object. It is disposed.", LogType.Error);
+        //        return;
+        //    }
 
-        public void ReleaseVAO(Renderable vao) {
-            if (!IsVAOBound(vao))
-                return;
+        //    GL.BindVertexArray(0);
+        //    this.boundVertexArrayObject = null;
+        //}
 
-            if (vao.IsDisposed) {
-                Log.Instance.WriteLine("Cannot release vertex array object. It is disposed.", LogType.Error);
-                return;
-            }
+        //internal void DeleteVAO(Renderable vao) {
+        //    if (vao == null)
+        //        return;
 
-            GL.BindVertexArray(0);
-            this.boundVertexArrayObject = null;
-        }
+        //    if (vao.IsBound)
+        //        ReleaseVAO(vao);
 
-        public void DeleteVAO(Renderable vao) {
-            if (vao.IsDisposed)
-                return;
+        //    FieldInfo vaoIDFI = vao.GetType().GetField("vaoID", BindingFlags.NonPublic | BindingFlags.Instance);
 
-            if (vao.IsBound)
-                ReleaseVAO(vao);
+        //    int vaoID = (int)vaoIDFI.GetValue(vao);
+        //    vaoIDFI.SetValue(vao, -1);
 
-            FieldInfo vaoIDFI = vao.GetType().GetField("vaoID", BindingFlags.NonPublic | BindingFlags.Instance);
+        //    GL.DeleteVertexArray(vaoID);
+        //}
 
-            int vaoID = (int)vaoIDFI.GetValue(vao);
-            vaoIDFI.SetValue(vao, -1);
+        //internal bool IsVAOBound(Renderable vao) => vao != null && vao.Equals(this.boundVertexArrayObject);
 
-            GL.DeleteVertexArray(vaoID);
-        }
+        //private static int GetVAOID(Renderable vao) {
+        //    FieldInfo vaoIDFI = vao.GetType().GetField("vaoID", BindingFlags.NonPublic | BindingFlags.Instance);
 
-        public bool IsVAOBound(Renderable vao) => vao != null && vao.Equals(this.boundVertexArrayObject);
-
-        private static int GetVAOID(Renderable vao) {
-            FieldInfo vaoIDFI = vao.GetType().GetField("vaoID", BindingFlags.NonPublic | BindingFlags.Instance);
-
-            return (int)vaoIDFI.GetValue(vao);
-        }
+        //    return (int)vaoIDFI.GetValue(vao);
+        //}
         #endregion
 
         #region VertexBufferObjects
-        public void InitializeVBO(VertexBufferObject vbo) {
-            FieldInfo vboIDFI = vbo.GetType().GetField("vboID", BindingFlags.NonPublic | BindingFlags.Instance);
-
+        internal VertexBufferObject CreateVBO(float[] data, BufferType type) {
             int vboID = GL.GenBuffer();
 
-            vboIDFI.SetValue(vbo, vboID);
+            VertexBufferObject vbo = new VertexBufferObject(vboID, data, type);
 
             VertexBufferObject previouslyBoundVBO = this.boundVertexBufferObject;
 
             BindVBO(vbo);
             GL.BufferData(BufferTarget.ArrayBuffer, vbo.Size * sizeof(float), (IntPtr)null, ToBufferUsageHint(vbo.Type));
 
+            IntPtr mapBufferPtr = GL.MapBuffer(BufferTarget.ArrayBuffer, BufferAccess.WriteOnly);
+            Marshal.Copy(vbo.Data, 0, mapBufferPtr, vbo.Size);
+            GL.UnmapBuffer(BufferTarget.ArrayBuffer);
+
             if (previouslyBoundVBO != null)
                 BindVBO(previouslyBoundVBO);
             else
                 ReleaseVBO(vbo);
+
+            return vbo;
         }
 
-        public void BindVBO(VertexBufferObject vbo) {
+        internal void BindVBO(VertexBufferObject vbo) {
             if (IsVBOBound(vbo))
                 return;
 
@@ -221,7 +257,7 @@ namespace GameApp.Graphics {
             this.boundVertexBufferObject = vbo;
         }
 
-        public void ReleaseVBO(VertexBufferObject vbo) {
+        internal void ReleaseVBO(VertexBufferObject vbo) {
             if (!IsVBOBound(vbo))
                 return;
 
@@ -234,28 +270,8 @@ namespace GameApp.Graphics {
             this.boundVertexBufferObject = null;
         }
 
-        public void MapVBOData(VertexBufferObject vbo) {
-            if (vbo.IsDisposed) {
-                Log.Instance.WriteLine("Cannot release vertex buffer object. It is disposed.", LogType.Error);
-                return;
-            }
-
-            VertexBufferObject previouslyBoundVBO = this.boundVertexBufferObject;
-
-            BindVBO(vbo);
-
-            IntPtr mapBufferPtr = GL.MapBuffer(BufferTarget.ArrayBuffer, BufferAccess.WriteOnly);
-            Marshal.Copy(vbo.Data.ToArray(), 0, mapBufferPtr, vbo.Data.Count());
-            GL.UnmapBuffer(BufferTarget.ArrayBuffer);
-
-            if (previouslyBoundVBO != null)
-                BindVBO(previouslyBoundVBO);
-            else
-                ReleaseVBO(vbo);
-        }
-
-        public void DeleteVBO(VertexBufferObject vbo) {
-            if (vbo.IsDisposed)
+        internal void DeleteVBO(VertexBufferObject vbo) {
+            if (vbo == null || vbo.IsDisposed)
                 return;
 
             if (vbo.IsBound)
@@ -269,7 +285,24 @@ namespace GameApp.Graphics {
             GL.DeleteBuffer(vboID);
         }
 
-        public bool IsVBOBound(VertexBufferObject vbo) => vbo != null && vbo.Equals(this.boundVertexBufferObject);
+        internal void UpdateVBOData(VertexBufferObject vbo) {
+            VertexBufferObject previouslyBoundVBO = this.boundVertexBufferObject;
+
+            BindVBO(vbo);
+
+            //GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)0, (IntPtr)(vbo.Size * sizeof(float)), vbo.Data);
+
+            IntPtr mapBufferPtr = GL.MapBuffer(BufferTarget.ArrayBuffer, BufferAccess.WriteOnly);
+            Marshal.Copy(vbo.Data, 0, mapBufferPtr, vbo.Data.Length);
+            GL.UnmapBuffer(BufferTarget.ArrayBuffer);
+
+            if (previouslyBoundVBO != null)
+                BindVBO(previouslyBoundVBO);
+            else
+                ReleaseVBO(vbo);
+        }
+
+        internal bool IsVBOBound(VertexBufferObject vbo) => vbo != null && vbo.Equals(this.boundVertexBufferObject);
 
         private static int GetVBOID(VertexBufferObject vbo) {
             FieldInfo vboIDFI = vbo.GetType().GetField("vboID", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -279,25 +312,29 @@ namespace GameApp.Graphics {
         #endregion
 
         #region IndexBufferObjects
-        public void InitializeIBO(IndexBufferObject ibo) {
-            FieldInfo iboIDFI = ibo.GetType().GetField("iboID", BindingFlags.NonPublic | BindingFlags.Instance);
-
+        internal IndexBufferObject CreateIBO(int[] data, BufferType type) {
             int iboID = GL.GenBuffer();
 
-            iboIDFI.SetValue(ibo, iboID);
+            IndexBufferObject ibo = new IndexBufferObject(iboID, data, type);
 
             IndexBufferObject previouslyBoundIBO = this.boundIndexBufferObject;
 
             BindIBO(ibo);
             GL.BufferData(BufferTarget.ElementArrayBuffer, ibo.Size * sizeof(int), (IntPtr)null, ToBufferUsageHint(ibo.Type));
 
+            IntPtr mapBufferPtr = GL.MapBuffer(BufferTarget.ElementArrayBuffer, BufferAccess.WriteOnly);
+            Marshal.Copy(ibo.Data, 0, mapBufferPtr, ibo.Size);
+            GL.UnmapBuffer(BufferTarget.ElementArrayBuffer);
+
             if (previouslyBoundIBO != null)
                 BindIBO(previouslyBoundIBO);
             else
                 ReleaseIBO(ibo);
+
+            return ibo;
         }
 
-        public void BindIBO(IndexBufferObject ibo) {
+        internal void BindIBO(IndexBufferObject ibo) {
             if (IsIBOBound(ibo))
                 return;
 
@@ -312,7 +349,7 @@ namespace GameApp.Graphics {
             this.boundIndexBufferObject = ibo;
         }
 
-        public void ReleaseIBO(IndexBufferObject ibo) {
+        internal void ReleaseIBO(IndexBufferObject ibo) {
             if (!IsIBOBound(ibo))
                 return;
 
@@ -325,28 +362,28 @@ namespace GameApp.Graphics {
             this.boundIndexBufferObject = null;
         }
 
-        public void MapIBOData(IndexBufferObject ibo) {
-            if (ibo.IsDisposed) {
-                Log.Instance.WriteLine("Cannot release index buffer object. It is disposed.", LogType.Error);
-                return;
-            }
+        //private void MapIBOData(IndexBufferObject ibo) {
+        //    if (ibo.IsDisposed) {
+        //        Log.Instance.WriteLine("Cannot release index buffer object. It is disposed.", LogType.Error);
+        //        return;
+        //    }
 
-            IndexBufferObject previouslyBoundIBO = this.boundIndexBufferObject;
+        //    IndexBufferObject previouslyBoundIBO = this.boundIndexBufferObject;
 
-            BindIBO(ibo);
+        //    BindIBO(ibo);
 
-            IntPtr mapBufferPtr = GL.MapBuffer(BufferTarget.ElementArrayBuffer, BufferAccess.WriteOnly);
-            Marshal.Copy((int[])(object)ibo.Data.ToArray(), 0, mapBufferPtr, ibo.Data.Count());
-            GL.UnmapBuffer(BufferTarget.ElementArrayBuffer);
+        //    IntPtr mapBufferPtr = GL.MapBuffer(BufferTarget.ElementArrayBuffer, BufferAccess.WriteOnly);
+        //    Marshal.Copy(ibo.Data, 0, mapBufferPtr, ibo.Size);
+        //    GL.UnmapBuffer(BufferTarget.ElementArrayBuffer);
 
-            if (previouslyBoundIBO != null)
-                BindIBO(previouslyBoundIBO);
-            else
-                ReleaseIBO(ibo);
-        }
+        //    if (previouslyBoundIBO != null)
+        //        BindIBO(previouslyBoundIBO);
+        //    else
+        //        ReleaseIBO(ibo);
+        //}
 
-        public void DeleteIBO(IndexBufferObject ibo) {
-            if (ibo.IsDisposed)
+        internal void DeleteIBO(IndexBufferObject ibo) {
+            if (ibo == null || ibo.IsDisposed)
                 return;
 
             if (ibo.IsBound)
@@ -357,10 +394,27 @@ namespace GameApp.Graphics {
             int iboID = (int)iboIDFI.GetValue(ibo);
             iboIDFI.SetValue(ibo, -1);
 
-            GL.DeleteBuffer(iboID);
+            try {
+                GL.DeleteBuffer(iboID);
+            } catch (AccessViolationException) { }
         }
 
-        public bool IsIBOBound(IndexBufferObject ibo) => ibo != null && ibo.Equals(this.boundIndexBufferObject);
+        internal void UpdateIBOData(IndexBufferObject ibo) {
+            IndexBufferObject previouslyBoundIBO = this.boundIndexBufferObject;
+
+            BindIBO(ibo);
+
+            IntPtr mapBufferPtr = GL.MapBuffer(BufferTarget.ElementArrayBuffer, BufferAccess.WriteOnly);
+            Marshal.Copy(ibo.Data, 0, mapBufferPtr, ibo.Size);
+            GL.UnmapBuffer(BufferTarget.ElementArrayBuffer);
+
+            if (previouslyBoundIBO != null)
+                BindIBO(previouslyBoundIBO);
+            else
+                ReleaseIBO(ibo);
+        }
+
+        internal bool IsIBOBound(IndexBufferObject ibo) => ibo != null && ibo.Equals(this.boundIndexBufferObject);
 
         private static int GetIBOID(IndexBufferObject ibo) {
             FieldInfo iboIDFI = ibo.GetType().GetField("iboID", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -370,21 +424,42 @@ namespace GameApp.Graphics {
         #endregion
 
         #region Shaders
-        public void CreateShader(string vertexShaderSource, string fragmentShaderSource, /*string geometryShaderSource,*/
-                                            out int programHandle, out int vertexShaderHandle, out int fragmentShaderHandle/*, out int geometryShaderHandle*/) {
-
-            vertexShaderHandle = CompileShader(vertexShaderSource, ShaderType.VertexShader);
-            fragmentShaderHandle = CompileShader(fragmentShaderSource, ShaderType.FragmentShader);
-            //vertexShaderHandle = CompileShader(geometryShaderSource, ShaderType.GeometryShader);
+        internal Shader CreateShader(string vertexShaderSource, string fragmentShaderSource) {
+            int programHandle = 0;
+            int vertexShaderHandle = CompileShader(vertexShaderSource, ShaderType.VertexShader);
+            int fragmentShaderHandle = CompileShader(fragmentShaderSource, ShaderType.FragmentShader);
+            var uniforms = new Dictionary<string, ShaderUniform>();
+            var attributes = new Dictionary<string, ShaderVertexAttribute>();
+            int stride = 0;
 
             if (vertexShaderHandle == 0 || fragmentShaderHandle == 0) {
-                vertexShaderHandle = 0;
-                fragmentShaderHandle = 0;
-                programHandle = 0;
-                return;
+                Log.Instance.WriteLine("Could not create vertex- or fragment shader handle.", LogType.Error);
+                return null;
             }
 
             programHandle = CreateShaderProrgam(vertexShaderHandle, fragmentShaderHandle);
+
+            if (programHandle == 0) {
+                Log.Instance.WriteLine("Could not link shader and create program handle.", LogType.Error);
+                return null;
+            }
+            if (!TryRetrieveShaderUniforms(programHandle, out uniforms)) {
+                Log.Instance.WriteLine("Could not retrieve shader uniforms.", LogType.Error);
+                GL.DeleteProgram(programHandle);
+                GL.DeleteShader(vertexShaderHandle);
+                GL.DeleteShader(fragmentShaderHandle); return null;
+            }
+
+            if (!TryRetrieveShaderAttributes(programHandle, out attributes)) {
+                Log.Instance.WriteLine("Could not retrieve shader attributes.", LogType.Error);
+                GL.DeleteProgram(programHandle);
+                GL.DeleteShader(vertexShaderHandle);
+                GL.DeleteShader(fragmentShaderHandle); return null;
+            }
+
+            stride = attributes.Values.Sum(sva => sva.ComponentCount) * sizeof(float);
+
+            return new Shader(vertexShaderSource, fragmentShaderSource, vertexShaderHandle, fragmentShaderHandle, programHandle, uniforms, attributes, stride);
         }
 
         private int CreateShaderProrgam(int vertexShaderHandle, int fragmentShaderHandle/*, int geometryShaderHandle*/) {
@@ -421,24 +496,40 @@ namespace GameApp.Graphics {
             GL.CompileShader(shader);
 
             GL.GetShader(shader, ShaderParameter.CompileStatus, out int status);
-            if (status == 0)
+            if (status == 0) {
+                string infoLog = GL.GetShaderInfoLog(shader);
+                Log.Instance.WriteLine($"{shaderType} compliation error: {infoLog}");
                 return 0;
+            }
 
             return shader;
         }
 
-        public void DeleteShader(Shader shader) {
+        internal void DeleteShader(Shader shader) {
+            if (!shader.IsCompiled)
+                return;
+
             if (IsShaderBound(shader))
                 ReleaseShader(shader);
 
-            (int program, int vertexShader, int fragmentShader) handles = GetShaderHandles(shader);
+            FieldInfo phFI = typeof(Shader).GetField("programHandle", BindingFlags.NonPublic | BindingFlags.Instance);
+            int ph = (int)phFI.GetValue(shader);
+            phFI.SetValue(shader, 0);
 
-            GL.DeleteProgram(handles.program);
-            GL.DeleteShader(handles.vertexShader);
-            GL.DeleteShader(handles.fragmentShader);
+            FieldInfo vshFI = typeof(Shader).GetField("vertexShaderHandle", BindingFlags.NonPublic | BindingFlags.Instance);
+            int vsh = (int)vshFI.GetValue(shader);
+            vshFI.SetValue(shader, 0);
+
+            FieldInfo fshFI = typeof(Shader).GetField("fragmentShaderHandle", BindingFlags.NonPublic | BindingFlags.Instance);
+            int fsh = (int)fshFI.GetValue(shader);
+            fshFI.SetValue(shader, 0);
+
+            GL.DeleteProgram(ph);
+            GL.DeleteShader(vsh);
+            GL.DeleteShader(fsh);
         }
 
-        public void BindShader(Shader shader) {
+        internal void BindShader(Shader shader) {
             if (shader.Equals(this.boundShader))
                 return;
 
@@ -448,7 +539,7 @@ namespace GameApp.Graphics {
             this.boundShader = shader;
         }
 
-        public void ReleaseShader(Shader shader) {
+        internal void ReleaseShader(Shader shader) {
             if (!this.boundShader.Equals(shader))
                 return;
             //asdasd // TODO set to default shader ?
@@ -456,7 +547,7 @@ namespace GameApp.Graphics {
             this.boundShader = null;
         }
 
-        public void SetVertexAttributePointer(Shader.ShaderVertexAttribute vertexAttribute, /*Type type,bool normalized,  */int stride) {
+        internal void SetVertexAttributePointer(ShaderVertexAttribute vertexAttribute, /*Type type,bool normalized,  */int stride) {
             GL.VertexAttribPointer(vertexAttribute.AttributeIndex, vertexAttribute.ComponentCount, /*ToVertexAttribPointerType(type)*/ VertexAttribPointerType.Float, false, stride, vertexAttribute.ByteOffset);
         }
 
@@ -485,11 +576,11 @@ namespace GameApp.Graphics {
         //    throw new ArgumentException();
         //}
 
-        public void EnableVertexAttributeArray(int attributeIndex) {
+        internal void EnableVertexAttributeArray(int attributeIndex) {
             GL.EnableVertexAttribArray(attributeIndex);
         }
 
-        public void DisableVertexAttributeArray(int attributeIndex) {
+        internal void DisableVertexAttributeArray(int attributeIndex) {
             GL.DisableVertexAttribArray(attributeIndex);
         }
 
@@ -499,23 +590,21 @@ namespace GameApp.Graphics {
             FieldInfo fragmentShaderHandleFI = shader.GetType().GetField("fragmentShaderHandle", BindingFlags.NonPublic | BindingFlags.Instance);
 
             int programHandle = (int)programHandleFI.GetValue(shader);
-            int vertexShaderHandle = (int)programHandleFI.GetValue(shader);
-            int fragmentShaderHandle = (int)programHandleFI.GetValue(shader);
+            int vertexShaderHandle = (int)vertexShaderHandleFI.GetValue(shader);
+            int fragmentShaderHandle = (int)fragmentShaderHandleFI.GetValue(shader);
 
             return (programHandle, vertexShaderHandle, fragmentShaderHandle);
         }
 
-        public Dictionary<string, Shader.ShaderUniform> RetrieveShaderUniforms(Shader shader, out bool validUniforms) {
-            Dictionary<string, Shader.ShaderUniform> uniforms = new Dictionary<string, Shader.ShaderUniform>();
+        private bool TryRetrieveShaderUniforms(int shaderProgramHandle, out Dictionary<string, ShaderUniform> uniforms) {
+            uniforms = new Dictionary<string, ShaderUniform>();
 
-            (int program, int vertexShader, int fragmentShader) handles = GetShaderHandles(shader);
+            GL.GetProgram(shaderProgramHandle, GetProgramParameterName.ActiveUniforms, out int uniformCount);
 
-            GL.GetProgram(handles.program, GetProgramParameterName.ActiveUniforms, out int uniformCount);
-
-            validUniforms = true;
+            bool validUniforms = true;
             for (int i = 0; i < uniformCount; i++) {
-                string uniformName = GL.GetActiveUniform(handles.program, i, out int size, out ActiveUniformType type);
-                int uniformLocation = GL.GetUniformLocation(handles.program, uniformName);
+                string uniformName = GL.GetActiveUniform(shaderProgramHandle, i, out int size, out ActiveUniformType type);
+                int uniformLocation = GL.GetUniformLocation(shaderProgramHandle, uniformName);
 
                 if (!IsValidShaderUniformType(type)) {
                     Log.Instance.WriteLine($"Invalid shader uniform type {type.ToString()} for uniform '{uniformName}'.", LogType.Error);
@@ -523,29 +612,27 @@ namespace GameApp.Graphics {
                     break;
                 }
 
-                Shader.UniformType uniformType = ConvertUniformType(type);
+                UniformType uniformType = ConvertUniformType(type);
 
-                Shader.ShaderUniform uniform = new Shader.ShaderUniform(uniformName, uniformType, uniformLocation, size);
+                ShaderUniform uniform = new ShaderUniform(uniformName, uniformType, uniformLocation, size * ActiveUniformTypeToSize(type));
                 uniforms.Add(uniformName, uniform);
             }
 
             if (!validUniforms)
                 uniforms.Clear();
 
-            return uniforms;
+            return validUniforms;
         }
 
-        public Dictionary<string, Shader.ShaderVertexAttribute> RetrieveShaderAttributes(Shader shader, out bool validAttributes) {
-            Dictionary<string, Shader.ShaderVertexAttribute> attributes = new Dictionary<string, Shader.ShaderVertexAttribute>();
+        private bool TryRetrieveShaderAttributes(int shaderProgramHandle, out Dictionary<string, ShaderVertexAttribute> attributes) {
+            Dictionary<string, ShaderVertexAttribute> tmpAttributes = new Dictionary<string, ShaderVertexAttribute>();
 
-            (int program, int vertexShader, int fragmentShader) handles = GetShaderHandles(shader);
+            GL.GetProgram(shaderProgramHandle, GetProgramParameterName.ActiveAttributes, out int attributeCount);
 
-            GL.GetProgram(handles.program, GetProgramParameterName.ActiveAttributes, out int attributeCount);
-
-            validAttributes = true;
+            bool validAttributes = true;
             for (int i = 0; i < attributeCount; i++) {
-                String attributeName = GL.GetActiveAttrib(handles.program, i, out int size, out ActiveAttribType type);
-                int attributeLocation = GL.GetAttribLocation(handles.program, attributeName);
+                String attributeName = GL.GetActiveAttrib(shaderProgramHandle, i, out int size, out ActiveAttribType type);
+                int attributeLocation = GL.GetAttribLocation(shaderProgramHandle, attributeName);
 
                 if (!IsValidShaderAttributeType(type)) {
                     Log.Instance.WriteLine($"Invalid shader attribute type {type.ToString()} for attribute '{attributeName}'.", LogType.Error);
@@ -553,22 +640,30 @@ namespace GameApp.Graphics {
                     break;
                 }
 
-                Shader.ShaderVertexAttribute attribute = new Shader.ShaderVertexAttribute(attributeName, attributeLocation, size);
-                attributes.Add(attributeName, attribute);
+                VertexAttributeType attributeType = ConvertVertexAttributeType(type);
+
+                ShaderVertexAttribute attribute = new ShaderVertexAttribute(attributeName, attributeLocation, attributeType);
+                tmpAttributes.Add(attributeName, attribute);
+            }
+
+            IOrderedEnumerable<KeyValuePair<string, ShaderVertexAttribute>> keyValuePairs = tmpAttributes.OrderBy(pair => pair.Value.AttributeIndex);
+            attributes = new Dictionary<string, ShaderVertexAttribute>();
+            foreach (KeyValuePair<string, ShaderVertexAttribute> pair in keyValuePairs) {
+                attributes[pair.Key] = pair.Value;
             }
 
             if (!validAttributes) {
                 attributes.Clear();
-                return attributes;
+                return false;
             }
 
             int currentOffset = 0;
-            HashSet<Shader.ShaderVertexAttribute> nonProcessedVAs = new HashSet<Shader.ShaderVertexAttribute>(attributes.Values);
+            List<ShaderVertexAttribute> nonProcessedVAs = new List<ShaderVertexAttribute>(attributes.Values);
             while (nonProcessedVAs.Count > 0) {
 
                 // get smallest index sva
-                Shader.ShaderVertexAttribute currentSVA = null;
-                foreach (Shader.ShaderVertexAttribute sva2 in nonProcessedVAs) {
+                ShaderVertexAttribute currentSVA = null;
+                foreach (ShaderVertexAttribute sva2 in nonProcessedVAs) {
                     if (currentSVA == null || sva2.AttributeIndex < currentSVA.AttributeIndex)
                         currentSVA = sva2;
                 }
@@ -583,20 +678,20 @@ namespace GameApp.Graphics {
                 nonProcessedVAs.Remove(currentSVA);
             }
 
-            return attributes;
+            return true;
         }
 
-        private Shader.UniformType ConvertUniformType(ActiveUniformType uniformType) {
+        private UniformType ConvertUniformType(ActiveUniformType uniformType) {
             switch (uniformType) {
                 //case ActiveUniformType.Int: return Shader.UniformType.Int;
-                case ActiveUniformType.Float: return Shader.UniformType.Float;
-                case ActiveUniformType.FloatVec2: return Shader.UniformType.FloatVector2;
-                case ActiveUniformType.FloatVec3: return Shader.UniformType.FloatVector3;
-                case ActiveUniformType.FloatVec4: return Shader.UniformType.FloatVector4;
-                case ActiveUniformType.FloatMat2: return Shader.UniformType.Matrix2x2;
-                case ActiveUniformType.FloatMat3: return Shader.UniformType.Matrix3x3;
-                case ActiveUniformType.FloatMat4: return Shader.UniformType.Matrix4x4;
-                case ActiveUniformType.Sampler2D: return Shader.UniformType.Texture2D;
+                case ActiveUniformType.Float: return UniformType.Float;
+                case ActiveUniformType.FloatVec2: return UniformType.FloatVector2;
+                case ActiveUniformType.FloatVec3: return UniformType.FloatVector3;
+                case ActiveUniformType.FloatVec4: return UniformType.FloatVector4;
+                case ActiveUniformType.FloatMat2: return UniformType.Matrix2x2;
+                case ActiveUniformType.FloatMat3: return UniformType.Matrix3x3;
+                case ActiveUniformType.FloatMat4: return UniformType.Matrix4x4;
+                case ActiveUniformType.Sampler2D: return UniformType.Texture2D;
             }
 
             throw new ArgumentException();
@@ -617,6 +712,18 @@ namespace GameApp.Graphics {
                     //ActiveUniformType.IntVec4.Equals(uniformType);
         }
 
+        private VertexAttributeType ConvertVertexAttributeType(ActiveAttribType attributeType) {
+            switch (attributeType) {
+                //case ActiveUniformType.Int: return Shader.UniformType.Int;
+                case ActiveAttribType.Float: return VertexAttributeType.Float;
+                case ActiveAttribType.FloatVec2: return VertexAttributeType.FloatVector2;
+                case ActiveAttribType.FloatVec3: return VertexAttributeType.FloatVector3;
+                case ActiveAttribType.FloatVec4: return VertexAttributeType.FloatVector4;
+            }
+
+            throw new ArgumentException();
+        }
+
         private bool IsValidShaderAttributeType(ActiveAttribType attributeType) {
             return ActiveAttribType.Float.Equals(attributeType) ||
                     ActiveAttribType.FloatVec2.Equals(attributeType) ||
@@ -631,194 +738,173 @@ namespace GameApp.Graphics {
                     //ActiveAttribType.IntVec4.Equals(attributeType);
         }
 
-        public void SetShaderUniform(int uniformLocation, float v1) {
+        internal void SetShaderUniform(int uniformLocation, float v1) {
             GL.Uniform1(uniformLocation, v1);
         }
 
-        public void SetShaderUniform(int uniformLocation, float v1, float v2) {
+        internal void SetShaderUniform(int uniformLocation, float v1, float v2) {
             GL.Uniform2(uniformLocation, v1, v2);
         }
 
-        public void SetShaderUniform(int uniformLocation, float v1, float v2, float v3) {
+        internal void SetShaderUniform(int uniformLocation, float v1, float v2, float v3) {
             GL.Uniform3(uniformLocation, v1, v2, v3);
         }
 
-        public void SetShaderUniform(int uniformLocation, float v1, float v2, float v3, float v4) {
+        internal void SetShaderUniform(int uniformLocation, float v1, float v2, float v3, float v4) {
             GL.Uniform4(uniformLocation, v1, v2, v3, v4);
         }
 
-        public void SetShaderUniform(int uniformLocation, int v1) {
+        internal void SetShaderUniform(int uniformLocation, int v1) {
             GL.Uniform1(uniformLocation, v1);
         }
 
-        //public void SetShaderUniform(int uniformLocation, int v1, int v2) {
+        //internal void SetShaderUniform(int uniformLocation, int v1, int v2) {
         //    GL.Uniform2(uniformLocation, v1, v2);
         //}
 
-        //public void SetShaderUniform(int uniformLocation, int v1, int v2, int v3) {
+        //internal void SetShaderUniform(int uniformLocation, int v1, int v2, int v3) {
         //    GL.Uniform3(uniformLocation, v1, v2, v3);
         //}
 
-        //public void SetShaderUniform(int uniformLocation, int v1, int v2, int v3, int v4) {
+        //internal void SetShaderUniform(int uniformLocation, int v1, int v2, int v3, int v4) {
         //    GL.Uniform4(uniformLocation, v1, v2, v3, v4);
         //}
 
-        public void SetShaderUniform(int uniformLocation, Matrix2 v1) {
+        internal void SetShaderUniform(int uniformLocation, Matrix2 v1) {
             GL.UniformMatrix2(uniformLocation, 1, false, v1.ColumnMajor);
         }
 
-        public void SetShaderUniform(int uniformLocation, Matrix3 v1) {
+        internal void SetShaderUniform(int uniformLocation, Matrix3 v1) {
             GL.UniformMatrix3(uniformLocation, 1, false, v1.ColumnMajor);
         }
 
-        public void SetShaderUniform(int uniformLocation, Matrix4 v1) {
+        internal void SetShaderUniform(int uniformLocation, Matrix4 v1) {
             GL.UniformMatrix4(uniformLocation, 1, false, v1.ColumnMajor);
         }
 
-        public bool IsShaderBound(Shader shader) {
+        internal bool IsShaderBound(Shader shader) {
             return shader.Equals(this.boundShader);
         }
 
         #endregion
 
         #region Textures
-        public void InitializeTexture(Texture2D texture) {
-            int texID = GL.GenTexture();
+        internal void InitializeTexture(Bitmap bitmap, TextureWrapMode wrapS, TextureWrapMode wrapT, TextureFilterMode minFilter, TextureFilterMode magFilter, out int textureID) {
+            textureID = GL.GenTexture();
 
-            FieldInfo texIDFI = texture.GetType().GetField("texID", BindingFlags.NonPublic | BindingFlags.Instance);
-            texIDFI.SetValue(texture, texID);
-
-            FieldInfo bmpFI = texture.GetType().GetField("bitmap", BindingFlags.NonPublic | BindingFlags.Instance);
-            Bitmap bmp = (Bitmap)bmpFI.GetValue(texture);
-            BitmapData bitmapData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-
-            GL.BindTexture(TextureTarget.Texture2D, texID);
+            GL.BindTexture(TextureTarget.Texture2D, textureID);
+            BitmapData bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, bitmapData.Width, bitmapData.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, bitmapData.Scan0);
 
-            bmp.UnlockBits(bitmapData);
-        }
+            bitmap.UnlockBits(bitmapData);
 
-        /// <summary>
-        /// Binds the texture to an available texture unit.
-        /// </summary>
-        /// <param name="texture">The texture.</param>
-        /// <returns>Returns the texture unit the texture was bound to. If all texture units are in use -1 is returned. </returns>
-        public int BindTexture(Texture texture) {
-            if (texture == null)
-                throw new ArgumentNullException(nameof(texture));
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapModeUtils.ToWrapMode(wrapS));
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapModeUtils.ToWrapMode(wrapT));
 
-            int textureUnit = BoundToTextureUnit(texture);
-            if (textureUnit > 0)
-                return textureUnit;
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureFilterModeUtils.ToMinFilter(minFilter));
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureFilterModeUtils.ToMinFilter(magFilter));
 
-            if (AvailableTextureUnits == 0)
-                return -1;
+            GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
 
-            textureUnit = NextAvailableTextureUnit;
-
-            BindTexture(texture, textureUnit);
-
-            return textureUnit;
-        }
-
-
-        /// <summary>
-        /// Binds the texture to the given texture unit. if the texture is already bound to another texture unit this texture unit will be cleared.
-        /// </summary>
-        /// <param name="texture">The texture.</param>
-        /// <param name="textureUnit">The texture unit.</param>
-        public void BindTexture(Texture texture, int textureUnit) {
-            if (texture == null)
-                throw new ArgumentNullException(nameof(texture));
-
-            int previouslyBoundToTextureUnit = BoundToTextureUnit(texture);
-            if (previouslyBoundToTextureUnit >= 0)
-                ReleaseTexture(previouslyBoundToTextureUnit);
-
-            ActivateTextureUnit(textureUnit);
-
-            AvailableTextureUnits--;
-            GL.BindTexture(TextureTarget.Texture2D, GetTextureID(texture));
-            this.boundTextures[textureUnit] = texture;
-        }
-
-        /// <summary>
-        /// Releases the texture of the given texture unit.
-        /// </summary>
-        /// <param name="textureUnit">The texture unit.</param>
-        /// <returns>Returns the bound texture. If no texture was bound to the given texture unit null is returned.</returns>
-        public void ReleaseTexture(int textureUnit) {
-            Texture texture = BoundTexture(textureUnit);
-            if (texture == null)
-                return;
-
-            if (ActiveTextureUnit != textureUnit)
-                ActivateTextureUnit(textureUnit);
-
-            this.boundTextures[textureUnit] = null;
             GL.BindTexture(TextureTarget.Texture2D, 0);
-            ActiveTextureUnit = -1;
-
-            AvailableTextureUnits++;
         }
 
-        /// <summary>
-        /// Releases the texture.
-        /// </summary>
-        /// <param name="texture">The texture.</param>
-        /// <returns>Returns the texture unit the texture was bound to. If it was not bound -1 is returned.</returns>
-        public void ReleaseTexture(Texture texture) {
-            int textureUnit = BoundToTextureUnit(texture);
+        internal void UpdateTextureData(Texture texture, int offsetX, int offsetY, Bitmap bitmap) {
+            GL.BindTexture(TextureTarget.Texture2D, texture.TextureID);
 
-            if (textureUnit < 0)
+            BitmapData bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            GL.TexSubImage2D(TextureTarget.Texture2D, 0, offsetX, offsetY, bitmapData.Width, bitmapData.Height, OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, bitmapData.Scan0);
+            bitmap.UnlockBits(bitmapData);
+
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+        }
+
+        internal void DisposeTexture(Texture2D texture) {
+            if (texture.IsDisposed)
                 return;
 
-            ReleaseTexture(textureUnit);
+            GL.BindTexture(TextureTarget.Texture2D, texture.TextureID);
+
+            FieldInfo texIDFI = typeof(Texture2D).GetField("textureID", BindingFlags.Instance | BindingFlags.NonPublic);
+            texIDFI.SetValue(texture, 0);
+
+            GL.DeleteTexture(texture.TextureID);
         }
 
-        public void DisposeTexture(Texture texture) {
-            ReleaseTexture(texture);
-            GL.DeleteTexture(GetTextureID(texture));
+        internal void AssignTexture(Texture2D texture) {
+            int unassignedTextureUnit = GetUnassignedTextureUnit();
+            if (unassignedTextureUnit < 0) {
+                Log.Instance.WriteLine("Cannot assign texture. No texture unit is available.", LogType.Warning);
+                return;
+            }
+
+            AssignTexture(texture, unassignedTextureUnit, false);
         }
 
-        public void ActivateTexture(Texture texture) {
-            int textureUnit = BoundToTextureUnit(texture);
+        internal void AssignTexture(Texture2D texture, int textureUnit, bool overrideBoundTexture = true) {
+            if (textureUnit < 0 || textureUnit >= SupportedTextureUnits) {
+                Log.Instance.WriteLine($"Invalid texture unit {textureUnit}. Must be between 0 and {SupportedTextureUnits} (exclusive).", LogType.Error);
+                return;
+            }
 
-            if (textureUnit < 0)
+            if (IsTextureAssigned(texture))
                 return;
 
-            ActivateTextureUnit(textureUnit);
+            Texture currentlyAssignedTexture = AssignedTexture(textureUnit);
+            if (currentlyAssignedTexture != null && !overrideBoundTexture) {
+                Log.Instance.WriteLine($"Cannot assign texture {texture.TextureID} to texture unit {textureUnit}. Another texture is already assigned.", LogType.Warning);
+                return;
+            }
+
+            GL.BindTextureUnit(textureUnit, texture.TextureID);
+
+            this.assignedTextures[textureUnit] = texture;
+            this.assignedTextureUnits[texture] = textureUnit;
         }
 
-        public void ActivateTextureUnit(int textureUnit) {
-            if (BoundTexture(textureUnit) == null)
+        internal void UnassignTexture(Texture texture) {
+            int assignedTextureUnit = AssignedTextureUnit(texture);
+            if (assignedTextureUnit < 0)
                 return;
 
-            if (ActiveTextureUnit == textureUnit)
+            this.assignedTextures[assignedTextureUnit] = null;
+            this.assignedTextureUnits.Remove(texture);
+            GL.BindTextureUnit(assignedTextureUnit, 0);
+        }
+
+        internal void UnassignTextureUnit(int textureUnit) {
+            if (textureUnit < 0 || textureUnit >= SupportedTextureUnits) {
+                Log.Instance.WriteLine($"Invalid texture unit {textureUnit}. Must be between 0 and {SupportedTextureUnits} (exclusive).", LogType.Error);
                 return;
+            }
 
-            GL.ActiveTexture(TextureUnit.Texture0 + textureUnit);
-            ActiveTextureUnit = textureUnit;
+            Texture currentlyAssignedTexture = AssignedTexture(textureUnit);
+            this.assignedTextures[textureUnit] = null;
+            this.assignedTextureUnits.Remove(currentlyAssignedTexture);
+            GL.BindTextureUnit(textureUnit, 0);
         }
 
-        public Texture BoundTexture(int textureUnit) {
-            if (textureUnit < 0 || textureUnit >= SupportedTextureUnits)
-                return null;
+        internal bool IsTextureAssigned(Texture texture) => AssignedTextureUnit(texture) >= 0;
 
-            return BoundTextures[textureUnit];
-        }
-
-        /// <summary>
-        /// Finds the texture unit the texture is bound to.
-        /// </summary>
-        /// <param name="texture">The texture.</param>
-        /// <returns>Returns the texture unit the texture is bound to. If it is not bound to any texture unit -1 is returned.</returns>
-        public int BoundToTextureUnit(Texture texture) {
-            if (texture == null)
+        internal int AssignedTextureUnit(Texture texture) {
+            if (this.assignedTextureUnits.TryGetValue(texture, out int textureUnit))
+                return textureUnit;
+            else
                 return -1;
+        }
 
-            for (int i = 0; i < BoundTextures.Length; i++) {
-                if (texture.Equals(BoundTextures[i]))
+        internal Texture AssignedTexture(int textureUnit) {
+            if (textureUnit < 0 || textureUnit >= SupportedTextureUnits) {
+                Log.Instance.WriteLine($"Invalid texture unit {textureUnit}. Must be between 0 and {SupportedTextureUnits} (exclusive).", LogType.Error);
+                return null;
+            }
+
+            return this.assignedTextures[textureUnit];
+        }
+
+        internal int GetUnassignedTextureUnit() {
+            for (int i = 0; i < this.assignedTextures.Length; i++) {
+                if (this.assignedTextures[i] == null)
                     return i;
             }
 
@@ -829,22 +915,36 @@ namespace GameApp.Graphics {
         /// Updates the texture's wrap mode.
         /// </summary>
         /// <param name="texture">The texture.</param>
-        public void UpdateTextureWrapMode(Texture texture) {
-            ActivateTexture(texture);
+        internal void UpdateTextureWrapMode(Texture texture) {
+            if (texture.IsDisposed) {
+                Log.Instance.WriteLine("Cannot update texture wrap mode. Texture is disposed.", LogType.Error);
+                return;
+            }
+
+            GL.BindTexture(TextureTarget.Texture2D, texture.TextureID);
 
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapModeUtils.ToWrapMode(texture.WrapS));
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapModeUtils.ToWrapMode(texture.WrapT));
+
+            GL.BindTexture(TextureTarget.Texture2D, 0);
         }
 
         /// <summary>
         /// Updates the texture's filter mode.
         /// </summary>
         /// <param name="texture">The texture.</param>
-        public void UpdateTextureFilterMode(Texture texture) {
-            ActivateTexture(texture);
+        internal void UpdateTextureFilterMode(Texture texture) {
+            if (texture.IsDisposed) {
+                Log.Instance.WriteLine("Cannot update texture filter mode. Texture is disposed.", LogType.Error);
+                return;
+            }
+
+            GL.BindTexture(TextureTarget.Texture2D, texture.TextureID);
 
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureFilterModeUtils.ToMinFilter(texture.MinFilter));
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureFilterModeUtils.ToMinFilter(texture.MagFilter));
+
+            GL.BindTexture(TextureTarget.Texture2D, 0);
         }
 
         /// <summary>
@@ -854,61 +954,7 @@ namespace GameApp.Graphics {
         /// <returns>
         ///   <c>true</c> if the specified texture is bound; otherwise, <c>false</c>.
         /// </returns>
-        public bool IsTextureBound(Texture texture) {
-            return BoundToTextureUnit(texture) != -1;
-        }
-
-        private int NextAvailableTextureUnit {
-            get {
-                for (int i = 0; i < BoundTextures.Length; i++) {
-                    if (BoundTextures[i] == null)
-                        return i;
-                }
-
-                return -1;
-            }
-        }
-
-        private int GetTextureID(Texture texture) {
-            PropertyInfo prop = texture.GetType().GetProperty("TextureID", BindingFlags.NonPublic | BindingFlags.Instance);
-            return (int)prop.GetValue(texture);
-            //MethodInfo getter = prop.GetGetMethod(true);
-            //return (int)getter.Invoke(texture, null);
-        }
-
-        public bool HasActiveTexture => ActiveTextureUnit >= 0;
-
-        public Texture ActiveTexture => BoundTexture(ActiveTextureUnit);
-
-        private Texture[] BoundTextures {
-            get {
-                if (this.boundTextures == null) {
-                    this.boundTextures = new Texture[SupportedTextureUnits];
-                    this.availableTextureUnits = SupportedTextureUnits;
-                }
-
-                return this.boundTextures;
-            }
-        }
-
-        private int AvailableTextureUnits {
-            get {
-                if (this.availableTextureUnits < 0) {
-                    this.boundTextures = new Texture[SupportedTextureUnits];
-                    this.availableTextureUnits = SupportedTextureUnits;
-                }
-
-                return this.availableTextureUnits;
-            }
-            set {
-                this.availableTextureUnits = value;
-
-                if (this.availableTextureUnits < 0 || this.availableTextureUnits > SupportedTextureUnits)
-                    throw new RenderException("Invalid number of available texture units.");
-            }
-        }
-
-        public int SupportedTextureUnits {
+        internal int SupportedTextureUnits {
             get {
                 if (this.supportedTextureUnits == -1)
                     this.supportedTextureUnits = GL.GetInteger(GetPName.MaxTextureUnits);
@@ -916,10 +962,11 @@ namespace GameApp.Graphics {
                 return this.supportedTextureUnits;
             }
         }
+
         #endregion Textures
 
         #region Transforms
-        public void ApplyTransformation(Transform transform) {
+        internal void ApplyTransformation(Transform transform) {
             if (!IsRendering)
                 return;
 
@@ -930,7 +977,7 @@ namespace GameApp.Graphics {
             this.transformStack.Push(m);
         }
 
-        //public void ApplyTranslation(float dx, float dy) {
+        //internal void ApplyTranslation(float dx, float dy) {
         //    if (!IsRendering)
         //        return;
 
@@ -941,7 +988,7 @@ namespace GameApp.Graphics {
         //    this.transformStack.Push(m);
         //}
 
-        //public void ApplyRotation(float angle) {
+        //internal void ApplyRotation(float angle) {
         //    if (!IsRendering)
         //        return;
 
@@ -952,7 +999,7 @@ namespace GameApp.Graphics {
         //    this.transformStack.Push(m);
         //}
 
-        //public void ApplyRotation(float angle, float px, float py) {
+        //internal void ApplyRotation(float angle, float px, float py) {
         //    if (!IsRendering)
         //        return;
 
@@ -964,7 +1011,7 @@ namespace GameApp.Graphics {
         //    this.transformStack.Push(m);
         //}
 
-        //public void ApplyScaling(float sx, float sy) {
+        //internal void ApplyScaling(float sx, float sy) {
         //    if (!IsRendering)
         //        return;
 
@@ -975,7 +1022,7 @@ namespace GameApp.Graphics {
         //    this.transformStack.Push(m);
         //}
 
-        public void RevertTransform() {
+        internal void RevertTransform() {
             if (!IsRendering)
                 return;
 
@@ -985,16 +1032,16 @@ namespace GameApp.Graphics {
             this.matrixPool.Put(this.transformStack.Pop());
         }
 
-        public Matrix4 CurrentTransformationMatrix => this.transformStack.Any() ? this.transformStack.Peek().Clone(): this.matrixPool.Get();
+        internal Matrix4 CurrentTransformationMatrix => this.transformStack.Any() ? this.transformStack.Peek().Clone(): this.matrixPool.Get();
 
         #endregion
 
         #region RenderSettings
-        public BlendMode BlendMode {
+        internal BlendMode BlendMode {
             set => BlendFunctions = BlendingModeUtils.ModeToFunctions(value);
         }
 
-        public (BlendFunction source, BlendFunction destination)? BlendFunctions {
+        internal (BlendFunction source, BlendFunction destination)? BlendFunctions {
             get {
                 if (this.blendFunctions == null)
                     return null;
@@ -1016,7 +1063,7 @@ namespace GameApp.Graphics {
             }
         }
 
-        public GameEngine.Graphics.RenderSettings.DepthFunction? DepthFunction {
+        internal GameEngine.Graphics.RenderSettings.DepthFunction? DepthFunction {
             get => this.depthFunction;
             set {
                 this.depthFunction = value;
@@ -1028,7 +1075,7 @@ namespace GameApp.Graphics {
             }
         }
 
-        public AntiAliasMode AntiAliasMode {
+        internal AntiAliasMode AntiAliasMode {
             get => this.antiAliasMode;
             set {
                 this.antiAliasMode = value;
@@ -1039,7 +1086,7 @@ namespace GameApp.Graphics {
             }
         }
 
-        public GameEngine.Utility.Color ClearColor {
+        internal Color ClearColor {
             get => this.clearColor;
             set {
                 this.clearColor = value;
@@ -1047,15 +1094,15 @@ namespace GameApp.Graphics {
             }
         }
 
-        public void SetClearModes(bool color, bool depth, bool stencil) {
+        internal void SetClearModes(bool color, bool depth, bool stencil) {
             ClearBufferMask cc = color ? ClearBufferMask.ColorBufferBit : 0;
-            ClearBufferMask cd = color ? ClearBufferMask.DepthBufferBit : 0;
-            ClearBufferMask cs = color ? ClearBufferMask.StencilBufferBit : 0;
+            ClearBufferMask cd = depth ? ClearBufferMask.DepthBufferBit : 0;
+            ClearBufferMask cs = stencil ? ClearBufferMask.StencilBufferBit : 0;
 
             this.clearBufferMask = cc | cd | cs;
         }
 
-        public bool EnableCulling {
+        internal bool EnableCulling {
             set {
                 if (value)
                     GL.Enable(EnableCap.CullFace);
@@ -1064,11 +1111,11 @@ namespace GameApp.Graphics {
             }
         }
 
-        public bool ClockwiseCulling {
+        internal bool ClockwiseCulling {
             set => GL.FrontFace(value ? FrontFaceDirection.Cw : FrontFaceDirection.Ccw);
         }
 
-        public void CullFaces(bool front, bool back) {
+        internal void CullFaces(bool front, bool back) {
             if (front && back)
                 GL.CullFace(CullFaceMode.FrontAndBack);
             else if (front)
@@ -1077,16 +1124,7 @@ namespace GameApp.Graphics {
                 GL.CullFace(CullFaceMode.Back);
         }
 
-        public bool EnableTextures {
-            set {
-                if (value)
-                    GL.Enable(EnableCap.Texture2D);
-                else
-                    GL.Disable(EnableCap.Texture2D);
-            }
-        }
-
-        public bool EnableBlending {
+        internal bool EnableBlending {
             set {
                 if (value)
                     GL.Enable(EnableCap.Blend);
@@ -1095,7 +1133,7 @@ namespace GameApp.Graphics {
             }
         }
 
-        public bool EnableDepthTest {
+        internal bool EnableDepthTest {
             set {
                 if (value)
                     GL.Enable(EnableCap.DepthTest);
@@ -1104,7 +1142,7 @@ namespace GameApp.Graphics {
             }
         }
 
-        public bool EnableEdgeAntialiasing {
+        internal bool EnableEdgeAntialiasing {
             set {
                 if (value) {
                     GL.Enable(EnableCap.PointSmooth);
@@ -1118,13 +1156,13 @@ namespace GameApp.Graphics {
             }
         }
 
-        public void EnableColors(bool red, bool green, bool blue, bool alpha) {
+        internal void EnableColors(bool red, bool green, bool blue, bool alpha) {
             GL.ColorMask(red, green, blue, alpha);
         }
 
         #endregion RenderSettings
 
-        //public void EnableLighting(bool enable) {
+        //internal void EnableLighting(bool enable) {
         //    if (enable)
         //        GL.Enable(GL_LIGHTING);
         //    else
@@ -1143,7 +1181,37 @@ namespace GameApp.Graphics {
             throw new ArgumentException();
         }
 
-        //public void SetVertexAttributePointer(int attributeIndex, int componentCount, bool v, int stride, int byteOffset) {
+        private static int ActiveAttribTypeToSize(ActiveAttribType type) {
+            string typeString = type.ToString();
+
+            if (typeString.EndsWith("Vec2"))
+                return 2;
+
+            if (typeString.EndsWith("Vec3"))
+                return 3;
+
+            if (typeString.EndsWith("Vec4"))
+                return 4;
+
+            return 1;
+        }
+
+        private static int ActiveUniformTypeToSize(ActiveUniformType type) {
+            string typeString = type.ToString();
+
+            if (typeString.EndsWith("Vec2"))
+                return 2;
+
+            if (typeString.EndsWith("Vec3"))
+                return 3;
+
+            if (typeString.EndsWith("Vec4"))
+                return 4;
+
+            return 1;
+        }
+
+        //internal void SetVertexAttributePointer(int attributeIndex, int componentCount, bool v, int stride, int byteOffset) {
         //    throw new NotImplementedException();
         //}
         #endregion

@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using GameApp.Logging;
 using GameEngine.Input;
+using GameEngine.Math;
 
 namespace GameApp.Input {
     internal sealed class InputManager : IInputManager {
@@ -21,8 +23,8 @@ namespace GameApp.Input {
         private HashSet<MouseButton> downMouseButtons;
         private readonly HashSet<MouseButton> releasedMouseButtons;
 
-        private (int x, int y) mousePos;
-        private (int x, int y) prevMousePos;
+        private readonly Vector2 mousePos;
+        private Vector2 prevMousePos;
         private float mouseWheel;
         private float prevMouseWheel;
 
@@ -40,6 +42,9 @@ namespace GameApp.Input {
         internal InputManager() {
             Instance = this;
 
+            this.mousePos = new Vector2();
+            this.prevMousePos = new Vector2();
+
             this.pressedKeys = new HashSet<Key>();
             this.downKeys = new HashSet<Key>();
             this.releasedKeys = new HashSet<Key>();
@@ -54,8 +59,6 @@ namespace GameApp.Input {
         internal bool VerifyInstallation() => true;
 
         internal void Initialize() {
-            this.prevMousePos = (0, 0);
-
             Window.Window.Instance.GameWindow.KeyDown += (sender, args) => {
                 if (!args.IsRepeat)
                     OnKeyDown?.Invoke(InputHelper.FromOpenTK(args.Key), InputHelper.FromOpenTK(args.Modifiers));
@@ -74,8 +77,8 @@ namespace GameApp.Input {
         internal void Update() {
             OpenTK.Input.MouseState state = OpenTK.Input.Mouse.GetCursorState();
             Point mousePos = Window.Window.Instance.ScreenToWindow(state.X, state.Y);
-            this.prevMousePos = MousePosition;
-            this.mousePos = (mousePos.X, mousePos.Y);
+            this.prevMousePos.Set(MousePosition);
+            this.mousePos.Set(mousePos.X, mousePos.Y);
 
             this.prevMouseWheel = this.mouseWheel;
             this.mouseWheel = state.WheelPrecise;
@@ -148,14 +151,9 @@ namespace GameApp.Input {
 
         public IEnumerable<MouseButton> ReleasedMouseButtons => this.releasedMouseButtons;
 
-        public (int x, int y) MousePosition => (this.mousePos.x, this.mousePos.y);
+        public Vector2 MousePosition => new Vector2(this.mousePos.x, this.mousePos.y);
 
-        public (int dx, int dy) MouseMovement {
-            get {
-                (int x, int y) mP = MousePosition;
-                return (mP.x - this.prevMousePos.x, mP.y - this.prevMousePos.y);
-            }
-        }
+        public Vector2 MouseMovement => MousePosition.Subtract(this.prevMousePos);
 
         public float MouseWheel => this.mouseWheel;
 

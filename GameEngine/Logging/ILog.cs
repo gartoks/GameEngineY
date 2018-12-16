@@ -1,4 +1,5 @@
-﻿using GameEngine.Modding;
+﻿using System;
+using GameEngine.Modding;
 using GameEngine.Utility;
 
 namespace GameEngine.Logging {
@@ -10,7 +11,11 @@ namespace GameEngine.Logging {
 
         void WriteLine(string text, LogType messageType = LogType.Message);
 
+        void WriteLine(Exception exception);
+
         void WriteLine(ModBase mod, string text, LogType messageType = LogType.Message);
+
+        void WriteLine(ModBase mod, Exception exception);
 
         Color MessageColor { get; set; }
 

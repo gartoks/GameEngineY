@@ -12,14 +12,15 @@ using GameEngine.Game.Utility;
 using GameEngine.Graphics;
 using GameEngine.Logging;
 using GameEngine.Math;
-using GameEngine.Modding;
+
+// ReSharper disable PossibleNullReferenceException
 
 namespace GameApp.Game {
     public sealed class GameObject : IGameObject {
 
         private static ConstructorInfo TransformConstructorInfo;
         private static PropertyInfo GOCUpdateGetterPropertyInfo;
-        private static PropertyInfo GOCRenderGetterPropertyInfo;
+        //private static PropertyInfo GOCRenderGetterPropertyInfo;
 
         internal IScene Scene { get; }
 
@@ -35,9 +36,7 @@ namespace GameApp.Game {
 
         public Transform Transform { get; }
 
-        private readonly List<(GOC goc, Action update, Action render)> components;
-        private readonly List<(GOC goc, Action update, Action render)> componentsBuffer;
-        private bool bufferModified;
+        private readonly List<(GOC goc, Action update)> components;
 
         public event GameObjectComponentModificationEventHandler OnComponentAdd;
         public event GameObjectComponentModificationEventHandler OnComponentRemove;
@@ -50,8 +49,8 @@ namespace GameApp.Game {
             if (GOCUpdateGetterPropertyInfo == null)
                 GOCUpdateGetterPropertyInfo = typeof(GOC).GetProperty("GetUpdateMethod", BindingFlags.Instance | BindingFlags.NonPublic, null, typeof(Action), new Type[0], null);
 
-            if (GOCRenderGetterPropertyInfo == null)
-                GOCRenderGetterPropertyInfo = typeof(GOC).GetProperty("GetRenderMethod", BindingFlags.Instance | BindingFlags.NonPublic, null, typeof(Action), new Type[0], null);
+            //if (GOCRenderGetterPropertyInfo == null)
+            //    GOCRenderGetterPropertyInfo = typeof(GOC).GetProperty("GetRenderMethod", BindingFlags.Instance | BindingFlags.NonPublic, null, typeof(Action), new Type[0], null);
 
             // ctor
             if (SceneManager.Instance.ActiveScene == null) {
@@ -71,9 +70,7 @@ namespace GameApp.Game {
                 scale = new Vector2(1, 1);
 
             this.children = new HashSet<GameObject>();
-            this.components = new List<(GOC, Action, Action)>();
-            this.componentsBuffer = new List<(GOC, Action, Action)>();
-            this.bufferModified = false;
+            this.components = new List<(GOC, Action)>();
 
             ID = Guid.NewGuid();
 
@@ -96,19 +93,11 @@ namespace GameApp.Game {
             this.updatingChildren.Clear();
             this.updatingChildren.AddRange(Children);
 
-            foreach ((GOC goc, Action update, Action render) goc in this.components) {
+            foreach ((GOC goc, Action update) goc in this.components.ToArray()) {
                 if (!goc.goc.IsActive)
                     continue;
 
                 goc.update();
-            }
-
-            if (this.bufferModified) {
-                lock (this.components) {
-                    this.components.Clear();
-                    this.components.AddRange(this.componentsBuffer);
-                    this.bufferModified = false;
-                }
             }
 
             foreach (GameObject child in this.updatingChildren) {
@@ -123,11 +112,17 @@ namespace GameApp.Game {
 
             GLHandler.Instance.ApplyTransformation(Transform);
 
-            foreach ((GOC goc, Action update, Action render) goc in this.components) {
+            foreach ((GOC goc, Action update) goc in this.components.ToArray()) {    // TODO may not be neccessary
                 if (!goc.goc.IsActive)
                     return;
 
-                goc.render();
+                IRenderable rawRenderable = goc.goc.Renderable;
+
+                if (rawRenderable == null)
+                    continue;
+
+                Renderable renderable = rawRenderable as Renderable;
+                renderable.Render();
             }
 
             this.renderingChildren.Clear();
@@ -160,11 +155,19 @@ namespace GameApp.Game {
                 return null;
             }
 
+            if (t.GetCustomAttribute<SingletonGOC>() != null && SceneManager.Instance.RawActiveScene.FindComponentsByType(t, false).Any()) {
+                //Log.WriteLine($"Cannot add GameObjectComponent (GOC) of type {t.Name} to GameObject {Name}. GOC is a singleton.");
+                return null;
+            }
+
             IEnumerable<RequiredGOCs> requiredComponentCollection = t.GetCustomAttributes<RequiredGOCs>(true);
             foreach (RequiredGOCs requiredComponents in requiredComponentCollection) {
                 GOCSearchMode searchMode = requiredComponents.InHierarchy ? GOCSearchMode.ParentalHierarchy : GOCSearchMode.This;
                 foreach (Type requiredComponent in requiredComponents.Required) {
-                    if (!GetComponents(requiredComponent, searchMode, true).Any())
+                    if (requiredComponent.GetCustomAttribute<SingletonGOC>() != null) {
+                        if (!SceneManager.Instance.RawActiveScene.FindComponentsByType(t, false).Any())
+                            AddComponent(requiredComponent, true, new object[0], new(string fieldName, object fielValue)[0]);
+                    } else if (!GetComponents(requiredComponent, searchMode, true).Any())
                         AddComponent(requiredComponent, true, new object[0], new(string fieldName, object fielValue)[0]);
                 }
             }
@@ -176,10 +179,8 @@ namespace GameApp.Game {
             gOFI.SetValue(component, this);
 
             Action updateAction = (Action)GOCUpdateGetterPropertyInfo.GetValue(component);
-            Action renderAction = (Action)GOCRenderGetterPropertyInfo.GetValue(component);
 
-            this.componentsBuffer.Add((component, updateAction, renderAction));
-            this.bufferModified = true;
+            this.components.Add((component, updateAction));
 
             component.IsEnabled = isEnabled;
 
@@ -209,8 +210,6 @@ namespace GameApp.Game {
             else
                 component.Initialize();
 
-            component.Initialize();
-
             OnComponentAdd?.Invoke(this, component);
 
             return component;
@@ -230,8 +229,7 @@ namespace GameApp.Game {
 
             OnComponentRemove?.Invoke(this, component);
 
-            this.componentsBuffer.RemoveAt(index);
-            this.bufferModified = true;
+            this.components.RemoveAt(index);
         }
 
         public T GetComponent<T>(GOCSearchMode searchMode = GOCSearchMode.This, bool includeDerivations = true) where T : GOC {
@@ -242,7 +240,7 @@ namespace GameApp.Game {
             return GetComponents(typeof(T), searchMode, includeDerivations).Cast<T>();
         }
 
-        private IEnumerable<GOC> GetComponents(Type t, GOCSearchMode searchMode, bool includeDerivations) {
+        internal IEnumerable<GOC> GetComponents(Type t, GOCSearchMode searchMode, bool includeDerivations) {
             if (!t.IsSubclassOf(typeof(GOC)))
                 throw new ArgumentException(nameof(t));
 
@@ -360,7 +358,7 @@ namespace GameApp.Game {
             return chs;
         }
 
-        IEnumerable<IGameObject> IGameObject.FindChildren(Func<IGameObject, bool> selector, bool includeChildrensChildren = false) {
+        IEnumerable<IGameObject> IGameObject.FindChildren(Func<IGameObject, bool> selector, bool includeChildrensChildren) {
             return FindChildren(selector, includeChildrensChildren);
         }
         public IEnumerable<GameObject> Children => this.children;

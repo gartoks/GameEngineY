@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using GameEngine.Math;
 
 namespace GameEngine.Input {
 
@@ -119,7 +120,7 @@ namespace GameEngine.Input {
         /// <value>
         /// The mouse position.
         /// </value>
-        (int x, int y) MousePosition { get; }
+        Vector2 MousePosition { get; }
 
         /// <summary>
         /// Gets the mouse movement.
@@ -127,7 +128,7 @@ namespace GameEngine.Input {
         /// <value>
         /// The mouse movement.
         /// </value>
-        (int dx, int dy) MouseMovement { get; }
+        Vector2 MouseMovement { get; }
 
         /// <summary>
         /// Gets the mouse wheel.

@@ -8,6 +8,7 @@ using GameApp.Application;
 using GameEngine.Game;
 using GameEngine.Game.GameObjects;
 using GameEngine.Game.GameObjects.GameObjectComponents;
+using GameEngine.Game.Utility;
 using GameEngine.Math;
 using GameEngine.Utility.DataStructures;
 
@@ -20,14 +21,14 @@ namespace GameApp.Game {
         private readonly List<GameObject> gameObjects;
         private readonly QuadTree<GameObject> positionTree;
 
-        public Scene(string name) {
+        internal Scene(string name) {
             this.Name = name;
 
             this.gameObjects = new List<GameObject>();
             this.positionTree = new QuadTree<GameObject>(AppConstants.Internals.SCENE_QUADTREE_SPLIT_MARGIN, AppConstants.Internals.SCENE_QUADTREE_MERGE_MARGIN);
         }
 
-        public void Update() {
+        internal void Update() {
             foreach (GameObject gO in this.gameObjects.ToArray()) {
                 if (gO.IsAlive && gO.IsEnabled) {
                     if (gO.Parent == null)
@@ -37,12 +38,12 @@ namespace GameApp.Game {
             }
         }
 
-        public void Render() {
+        internal void Render() {
             if (MainViewport == null)
                 return;
 
             foreach (GameObject gO in this.gameObjects.ToArray()) {
-                if (gO.IsAlive && gO.IsEnabled)
+                if (gO.IsAlive && gO.IsEnabled && gO.Parent == null)
                     gO.Render();
             }
         }
@@ -88,6 +89,10 @@ namespace GameApp.Game {
         IEnumerable<IGameObject> IScene.GameObjects => GameObjects;
 
         public IEnumerable<T> FindComponentsByType<T>(bool activeOnly = true) where T : GOC => GameObjects.Where(gO => gO.IsEnabled || !activeOnly).SelectMany(gO => gO.GetComponents<T>());
+
+        internal IEnumerable<GOC> FindComponentsByType(Type t, bool activeOnly = true) => GameObjects.Where(gO => gO.IsAlive || !activeOnly).SelectMany(gO => gO.GetComponents(t, GOCSearchMode.This, true));
+
+        public T FindComponentByType<T>(bool activeOnly = true) where T : GOC => GameObjects.Where(gO => gO.IsAlive || !activeOnly).Select(gO => gO.GetComponent<T>()).FirstOrDefault();
 
         private void GameObjectTransformOnGlobalPositionChanged(IGameObject gameObject) {
             Vector2 gOgP = gameObject.Transform.GlobalPosition;

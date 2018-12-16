@@ -22,5 +22,11 @@
 
             return text;
         }
+
+        public static string PadBoth(this string str, int totalLength) {
+            int spaces = totalLength - str.Length;
+            int padLeft = spaces / 2 + str.Length;
+            return str.PadLeft(padLeft).PadRight(totalLength);
+        }
     }
 }

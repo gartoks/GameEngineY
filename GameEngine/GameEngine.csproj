@@ -31,9 +31,13 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="OpenTK">
+      <HintPath>..\packages\OpenTK.2.0.0\lib\net20\OpenTK.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -49,38 +53,59 @@
     <Compile Include="Exceptions\RenderException.cs" />
     <Compile Include="Files\File.cs" />
     <Compile Include="Files\IFileManager.cs" />
+    <Compile Include="Game\Animation\IAnimationTimer.cs" />
+    <Compile Include="Game\Animation\LoopTimer.cs" />
+    <Compile Include="Game\Animation\OneTimeTimer.cs" />
+    <Compile Include="Game\Animation\PingPongTimer.cs" />
+    <Compile Include="Game\Animation\Timeline.cs" />
     <Compile Include="Game\GameObjects\GameObjectComponents\GOC.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIComponents\GUIButton.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIComponents\GUIComponent.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIComponents\GUILabel.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIComponents\GUIPanel.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIComponents\GUIProgressbar.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIComponents\GUISlider.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIComponents\GUITextbox.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\GUIHandler.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\CustomSprite.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\Sprite.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\TextSprite.cs" />
+    <Compile Include="Game\GameObjects\GameObjectComponents\Timer.cs" />
     <Compile Include="Game\GameObjects\GameObjectComponents\Viewport.cs" />
     <Compile Include="Game\GameObjects\IGameObject.cs" />
+    <Compile Include="Game\GameObjects\Prefabs\DebugGUIPrefab.cs" />
     <Compile Include="Game\GameObjects\Transform.cs" />
     <Compile Include="Game\IScene.cs" />
     <Compile Include="Game\ISceneManager.cs" />
     <Compile Include="Game\Scene.cs" />
     <Compile Include="Game\Utility\GOCSearchMode.cs" />
     <Compile Include="Game\Utility\RequiredGOCs.cs" />
-    <Compile Include="Graphics\GLHandler.cs" />
-    <Compile Include="Graphics\IGLHandler.cs" />
-    <Compile Include="Graphics\Mesh.cs" />
-    <Compile Include="Graphics\MeshBuilder.cs" />
-    <Compile Include="Graphics\Renderable.cs" />
+    <Compile Include="Game\Utility\SingletonGOC.cs" />
+    <Compile Include="Game\Utility\UserInterface\GUIComponentState.cs" />
+    <Compile Include="Game\Utility\UserInterface\GUIDock.cs" />
+    <Compile Include="Game\Utility\UserInterface\GUIInteractionColors.cs" />
+    <Compile Include="Game\Utility\UserInterface\GUIInteractionGraphics.cs" />
+    <Compile Include="Graphics\GraphicsHandler.cs" />
+    <Compile Include="Graphics\IGraphicsHandler.cs" />
+    <Compile Include="Graphics\IMesh.cs" />
+    <Compile Include="Graphics\IRenderable.cs" />
+    <Compile Include="Graphics\IShader.cs" />
+    <Compile Include="Graphics\ITextureAtlas.cs" />
     <Compile Include="Graphics\RenderSettings\AntiAliasMode.cs" />
     <Compile Include="Graphics\RenderSettings\BlendingMode.cs" />
     <Compile Include="Graphics\RenderSettings\DepthFunction.cs" />
     <Compile Include="Graphics\RenderSettings\TextureFilterMode.cs" />
     <Compile Include="Graphics\RenderSettings\TextureWrapMode.cs" />
-    <Compile Include="Graphics\Shader.cs" />
-    <Compile Include="Graphics\Textures\SubTexture2D.cs" />
-    <Compile Include="Graphics\Textures\Texture.cs" />
-    <Compile Include="Graphics\Textures\Texture2D.cs" />
-    <Compile Include="Graphics\Textures\TextureAtlas.cs" />
-    <Compile Include="Graphics\Utility\BufferType.cs" />
-    <Compile Include="Graphics\Utility\IndexBufferObject.cs" />
+    <Compile Include="Graphics\Utility\IShaderUniformAssigner.cs" />
+    <Compile Include="Graphics\Utility\IVertexData.cs" />
     <Compile Include="Graphics\Utility\MatrixTransformationHelper.cs" />
+    <Compile Include="Graphics\Utility\IUniform.cs" />
+    <Compile Include="Graphics\Utility\UniformType.cs" />
     <Compile Include="Graphics\Utility\VertexAttribute.cs" />
-    <Compile Include="Graphics\Utility\VertexBufferObject.cs" />
+    <Compile Include="Graphics\Utility\VertexAttributeType.cs" />
     <Compile Include="Input\GamepadButton.cs" />
     <Compile Include="Input\IInputManager.cs" />
-    <Compile Include="Input\Input.cs" />
+    <Compile Include="Input\InputHandler.cs" />
     <Compile Include="Input\JoystickButton.cs" />
     <Compile Include="Input\Key.cs" />
     <Compile Include="Input\KeyModifiers.cs" />
@@ -105,10 +130,13 @@
     <Compile Include="Modding\IModManager.cs" />
     <Compile Include="Modding\ModBase.cs" />
     <Compile Include="Modding\ModManager.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="Graphics\ITexture.cs" />
     <Compile Include="Resources\IResourceManager.cs" />
     <Compile Include="Resources\Loaders\ShaderLoader.cs" />
+    <Compile Include="Resources\Loaders\FontLoader.cs" />
     <Compile Include="Resources\Loaders\TextLoader.cs" />
+    <Compile Include="Resources\Loaders\TextureAtlasLoader.cs" />
     <Compile Include="Resources\Loaders\TextureLoader.cs" />
     <Compile Include="Resources\Resource.cs" />
     <Compile Include="Resources\ResourceManager.cs" />
@@ -120,6 +148,7 @@
     <Compile Include="Utility\Algorithms\Pathfinding\AStar.cs" />
     <Compile Include="Utility\Algorithms\Pathfinding\Path.cs" />
     <Compile Include="Utility\Color.cs" />
+    <Compile Include="Utility\DataStructures\LRUCache.cs" />
     <Compile Include="Utility\DataStructures\ObjectPool.cs" />
     <Compile Include="Utility\DataStructures\QuadTree.cs" />
     <Compile Include="Utility\Extensions\CollectionExtensions.cs" />
@@ -131,6 +160,8 @@
     <Compile Include="Window\ScreenMode.cs" />
     <Compile Include="Window\Window.cs" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Properties\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

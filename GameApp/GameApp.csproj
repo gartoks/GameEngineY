@@ -55,7 +55,24 @@
     <Compile Include="Application\Application.cs" />
     <Compile Include="Application\ApplicationInitializationSettings.cs" />
     <Compile Include="Application\TimeManager.cs" />
-    <Compile Include="Files\FileManager.cs" />
+    <Compile Include="Application\FileManager.cs" />
+    <Compile Include="Graphics\Buffers\BufferType.cs" />
+    <Compile Include="Graphics\Buffers\IndexBufferObject.cs" />
+    <Compile Include="Graphics\GraphicsHandler.cs" />
+    <Compile Include="Graphics\Mesh.cs" />
+    <Compile Include="Graphics\Renderable.cs" />
+    <Compile Include="Graphics\Shader.cs" />
+    <Compile Include="Graphics\Textures\SubTexture2D.cs" />
+    <Compile Include="Graphics\Textures\Texture.cs" />
+    <Compile Include="Graphics\Textures\Texture2D.cs" />
+    <Compile Include="Graphics\Textures\TextureAtlas.cs" />
+    <Compile Include="Graphics\Buffers\VertexBufferObject.cs" />
+    <Compile Include="Graphics\Utility\ShaderUniform.cs" />
+    <Compile Include="Graphics\Utility\ShaderUniformAssigner.cs" />
+    <Compile Include="Graphics\Utility\ShaderVertexAttribute.cs" />
+    <Compile Include="Graphics\Utility\VertexData.cs" />
+    <Compile Include="Utility\ConsoleActivator.cs" />
+    <Compile Include="Utility\FileLockChecker.cs" />
     <Compile Include="Game\GameObject.cs" />
     <Compile Include="Game\Scene.cs" />
     <Compile Include="Game\SceneManager.cs" />
@@ -84,6 +101,16 @@
       <Name>GameEngine</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Files\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Graphics\Shaders\EllipseShader.fs">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="Graphics\Shaders\EllipseShader.vs">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

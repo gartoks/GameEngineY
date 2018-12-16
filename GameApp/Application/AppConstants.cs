@@ -20,7 +20,7 @@ namespace GameApp.Application {
 
         internal static class Files {
             public const string SETTINGS = "settings." + FileExtensions.SETTINGS_FILE;
-            public const string MOD = Mods.MOD_FILE_NAME + FileExtensions.DLL_FILE;
+            public const string MOD = Mods.MOD_FILE_NAME + "." + FileExtensions.DLL_FILE;
         }
 
         internal static class Directories {
@@ -30,8 +30,9 @@ namespace GameApp.Application {
 
         internal static class Defaults {
             public static readonly Color LOG_DEFAULT_COLOR_MESSAGE = Color.WHITE;
-            public static readonly Color LOG_DEFAULT_COLOR_WARNING = Color.ORANGE;
+            public static readonly Color LOG_DEFAULT_COLOR_WARNING = Color.YELLOW;
             public static readonly Color LOG_DEFAULT_COLOR_ERROR = Color.RED;
+            public static readonly Color LOG_DEFAULT_COLOR_DEBUG = Color.LIME;
             public const string APP_LANGUAGE = "en-US";
             public const int APP_FRAMES_PER_SECOND = 60;
             public const int APP_UPDATES_PER_SECOND = 60;
@@ -61,8 +62,9 @@ namespace GameApp.Application {
         internal static class Internals {
             public const string SETTINGS_XML_ROOT = "Settings";
             public const int RESOURCE_THREAD_IDLE_SLEEP_TIME = 250;
-            public const uint SCENE_QUADTREE_SPLIT_MARGIN = 50;
-            public const uint SCENE_QUADTREE_MERGE_MARGIN = 20;
+            public const uint SCENE_QUADTREE_SPLIT_MARGIN = 500;
+            public const uint SCENE_QUADTREE_MERGE_MARGIN = 200;
+            public static readonly Color TEXTURE_DEFAULT_COLOR = new Color(255, 0, 255);
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿namespace GameEngine.Graphics.RenderSettings {
     public enum TextureWrapMode {
         Repeat,
-        Clamp
+        Clamp,
+        ClampToEdge
     }
 }

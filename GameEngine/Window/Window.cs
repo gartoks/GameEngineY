@@ -96,5 +96,7 @@ namespace GameEngine.Window {
         /// The height.
         /// </value>
         public static int Height => ModBase.Window.Height;
+
+        public static float AspectRatio => Width / (float)Height;
     }
 }

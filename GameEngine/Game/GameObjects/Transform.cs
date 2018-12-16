@@ -1,5 +1,6 @@
 ﻿using System;
 using GameEngine.Graphics.Utility;
+using GameEngine.Logging;
 using GameEngine.Math;
 
 namespace GameEngine.Game.GameObjects {
@@ -12,6 +13,7 @@ namespace GameEngine.Game.GameObjects {
         private readonly Vector2 position;
         private readonly Vector2 scale;
         private float rotation;
+        private float z;
 
         private readonly Matrix4 localTransformationMatrix;
         private bool isLocalTransformationMatrixDirty;
@@ -25,7 +27,9 @@ namespace GameEngine.Game.GameObjects {
             GameObject = gameObject;
 
             this.position = new Vector2();
+            this.position.OnChange += v => MakeLocalTransformationMatrixDirty();
             this.scale = new Vector2();
+            this.scale.OnChange += v => MakeLocalTransformationMatrixDirty();
             this.rotation = 0;
 
             this.localTransformationMatrix = Matrix4.CreateIdentity();
@@ -39,7 +43,7 @@ namespace GameEngine.Game.GameObjects {
         }
 
         public Vector2 Position {
-            get => this.position.Clone();
+            get => this.position;
             set {
                 if (value == null)
                     throw new ArgumentNullException(nameof(value));
@@ -48,6 +52,20 @@ namespace GameEngine.Game.GameObjects {
                     return;
 
                 this.position.Set(value);
+                MakeLocalTransformationMatrixDirty();
+            }
+        }
+
+        public float Z {
+            get => this.z;
+            set {
+                if (float.IsInfinity(value) || float.IsNaN(value)) {
+                    Log.WriteLine("Invalid transform z value.");
+                    return;
+                }
+
+                this.z = value;
+                
                 MakeLocalTransformationMatrixDirty();
             }
         }
@@ -71,7 +89,7 @@ namespace GameEngine.Game.GameObjects {
         }
 
         public Vector2 Scale {
-            get => this.scale.Clone();
+            get => this.scale;
             set {
                 if (value == null || value.Equals(0, 0))
                     throw new ArgumentNullException(nameof(value));
@@ -88,7 +106,7 @@ namespace GameEngine.Game.GameObjects {
 
         public Matrix4 GlobalTransformationMatrix => RawGlobalTransformationMatrix.Clone();
 
-        private Matrix4 RawGlobalTransformationMatrix {
+        internal Matrix4 RawGlobalTransformationMatrix {
             get {
                 if (isGlobalTransformationMatrixDirty) {
                     if (GameObject.Parent == null)
@@ -107,10 +125,10 @@ namespace GameEngine.Game.GameObjects {
 
         public Matrix4 LocalTransformationMatrix => RawLocalTransformationMatrix.Clone();
 
-        private Matrix4 RawLocalTransformationMatrix {
+        internal Matrix4 RawLocalTransformationMatrix {
             get {
                 if (isLocalTransformationMatrixDirty) {
-                    this.localTransformationMatrix.MakeTransformation(this.position, this.rotation, false, this.scale);
+                    this.localTransformationMatrix.MakeTransformation(this.position, -Z, this.rotation, false, this.scale);
                     this.isLocalTransformationMatrixDirty = false;
                 }
 

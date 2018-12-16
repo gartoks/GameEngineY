@@ -2,10 +2,12 @@
 
 namespace GameEngine.Math.Shapes {
     public class Rectangle : Shape {
-        public float X;
-        public float Y;
+        private float x;
+        private float y;
         private float width;
         private float height;
+
+        internal Action<Rectangle> OnChange;
 
         public Rectangle(Rectangle rectangle)
             : this(rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height) { }
@@ -14,25 +16,32 @@ namespace GameEngine.Math.Shapes {
             : this(position.x, position.y, size.x, size.y) { }
 
         public Rectangle(float x, float y, float width, float height) {
-            X = x;
-            Y = y;
-            Width = width;
-            Height = height;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
         }
         public override void Translate(float dx, float dy) {
-            X += dx;
-            Y += dy;
+
+            if (!float.IsInfinity(dx) && !float.IsNaN(dx))
+                this.x += dx;
+            if (!float.IsInfinity(dy) && !float.IsNaN(dy))
+                this.y += dy;
+
+            OnChange?.Invoke(this);
         }
 
         public override void Scale(float sx, float sy) {
             float w = Width * sx;
             float h = Height * sy;
 
-            X += (Width - w) / 2f;
-            Y += (Height - h) / 2f;
+            this.x += (Width - w) / 2f;
+            this.y += (Height - h) / 2f;
 
-            Width = w;
-            Height = h;
+            this.width = w;
+            this.height = h;
+
+            OnChange?.Invoke(this);
         }
 
         public override bool Contains(float x, float y) {
@@ -45,6 +54,48 @@ namespace GameEngine.Math.Shapes {
 
         public override bool Intersects(Shape s, bool includeContains) {
             return s.BoundingRectangle.Intersects(BoundingRectangle, includeContains);    // TODO
+        }
+
+        public float X {
+            get => this.x;
+            set {
+                if (float.IsInfinity(value) || float.IsNaN(value))
+                    return;
+
+                this.x = value;
+
+                OnChange?.Invoke(this);
+            }
+        }
+
+        public float Y {
+            get => this.y;
+            set {
+                if (float.IsInfinity(value) || float.IsNaN(value))
+                    return;
+
+                this.y = value;
+
+                OnChange?.Invoke(this);
+            }
+        }
+
+        public Vector2 Position {
+            get => new Vector2(X, Y);
+            set {
+                if (value == null)
+                    return;
+
+                if (float.IsInfinity(value.x) || float.IsNaN(value.x))
+                    return;
+                if (float.IsInfinity(value.y) || float.IsNaN(value.y))
+                    return;
+
+                this.x = value.x;
+                this.y = value.y;
+
+                OnChange?.Invoke(this);
+            }
         }
 
         public float Width {
@@ -67,6 +118,30 @@ namespace GameEngine.Math.Shapes {
             }
         }
 
+        public Vector2 Size {
+            get => new Vector2(Width, Height);
+            set {
+                if (value == null)
+                    return;
+
+                if (float.IsInfinity(value.x) || float.IsNaN(value.x))
+                    return;
+                if (float.IsInfinity(value.y) || float.IsNaN(value.y))
+                    return;
+
+                if (value.x < 0)
+                    return;
+
+                if (value.y < 0)
+                    return;
+
+                this.width = value.x;
+                this.height = value.y;
+                
+                OnChange?.Invoke(this);
+            }
+        }
+
         public float Top => Y + Height;
 
         public float Bottom => Y;
@@ -79,7 +154,7 @@ namespace GameEngine.Math.Shapes {
 
         public float CenterY => Y + Height / 2f;
 
-        public override Vector2 Center => new Vector2(X + Width / 2f, Y + Height / 2f);
+        public override Vector2 Center => new Vector2(CenterX, CenterY);
 
         public override Rectangle BoundingRectangle => this;
 
@@ -111,7 +186,11 @@ namespace GameEngine.Math.Shapes {
         //}
 
         public override string ToString() {
-            return $"({Left}, {Top}, {Right}, {Bottom})";
+            return $"({Left}, {Bottom}, {Right}, {Top})";
+        }
+
+        public string ToStringSize() {
+            return $"({Left}, {Bottom}, {Width}, {Height})";
         }
     }
 }

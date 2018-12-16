@@ -1,17 +1,18 @@
-﻿using GameEngine.Modding;
+﻿using System;
+using GameEngine.Modding;
 using GameEngine.Utility;
 
 namespace GameEngine.Logging {
     public static class Log {
         public static event LogEventHandler OnLog;
 
-        static Log() {  // TODO make sure this isnt called before the ModBase is initialized
-            ModBase.Log.OnLog += (text, logType, color) => {
-                OnLog?.Invoke(text, logType, color);
-            };
+        internal static void InvokeEvent(string text, LogType type, Color color) {
+            OnLog?.Invoke(text, type, color);
         }
 
         public static void WriteLine(string text, LogType messageType = LogType.Message) => ModBase.Log.WriteLine(ModBase.Instance, text, messageType);
+
+        public static void WriteLine(Exception exception) => ModBase.Log.WriteLine(ModBase.Instance, exception);
 
         public static Color MessageColor {
             get => ModBase.Log.MessageColor;

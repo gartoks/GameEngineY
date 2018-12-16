@@ -8,6 +8,7 @@ using OpenTK;
 using OpenTK.Graphics;
 using static GameApp.Application.AppConstants.SettingKeys;
 using Color = GameEngine.Utility.Color;
+using System.Threading;
 
 namespace GameApp.Window {
     internal class Window : IWindow {
@@ -20,6 +21,8 @@ namespace GameApp.Window {
         private ScreenMode screenMode;
 
         private GameWindow gameWindow;
+
+        internal Thread RenderThread { get; private set; }
 
         internal Window() {
             Instance = this;
@@ -48,7 +51,7 @@ namespace GameApp.Window {
                 SettingsManager.Instance.HasSetting(WINDOW_STENCIL_BUFFER_SIZE);
         }
 
-        internal void Initialize(Icon icon) {
+        internal void Initialize(string title, Icon icon) {
             SettingsManager.Instance.AddListener((setting, newSetting, oldSetting) => {
                 switch (setting) {
                     case WINDOW_RESOLUTION_X:
@@ -84,13 +87,21 @@ namespace GameApp.Window {
             ScreenMode = SettingsManager.Instance.Get(WINDOW_SCREEN_MODE, s => (ScreenMode)Enum.Parse(typeof(ScreenMode), s));
             VSync = SettingsManager.Instance.Get(WINDOW_VSYNC, bool.Parse);
 
+            this.gameWindow.Title = title ?? "GameWindow";
             this.gameWindow.Icon = icon;
         }
 
         internal void Show() {
             int fps = SettingsManager.Instance.Get(APP_FRAMES_PER_SECOND, int.Parse);
 
-            this.gameWindow.Run(1f, 1f / fps);
+            this.gameWindow.RenderFrame += GetRenderThread;
+            this.gameWindow.Run(1f, fps);
+        }
+
+        private void GetRenderThread(object sender, FrameEventArgs frameEventArgs) {
+            if (RenderThread == null)
+                RenderThread = Thread.CurrentThread;
+            this.gameWindow.RenderFrame -= GetRenderThread;
         }
 
         // svw (cosphi (px - vx) scx - sinphi (py - vy) sy) / sww
@@ -177,6 +188,7 @@ namespace GameApp.Window {
                 this.screenMode = value;
 
                 if (value == ScreenMode.Fullscreen) {
+                    this.gameWindow.Location = new Point(0, 0);
                     this.gameWindow.ClientSize = new Size(DisplayDevice.Default.Width, DisplayDevice.Default.Height);
                     this.gameWindow.WindowState = WindowState.Fullscreen;
                     this.gameWindow.WindowBorder = WindowBorder.Fixed;
@@ -186,6 +198,7 @@ namespace GameApp.Window {
                     this.gameWindow.WindowState = WindowState.Normal;
                     this.gameWindow.WindowBorder = WindowBorder.Fixed;
                 } else if (value == ScreenMode.BorderlessWindow) {
+                    this.gameWindow.Location = new Point(0, 0);
                     this.gameWindow.ClientSize = new Size(DisplayDevice.Default.Width, DisplayDevice.Default.Height);
                     this.gameWindow.WindowBorder = WindowBorder.Hidden;
                 }

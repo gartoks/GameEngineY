@@ -4,9 +4,11 @@ using GameEngine.Graphics;
 namespace GameEngine.Game.GameObjects.GameObjectComponents {
     public abstract class GOC {
 
-        private readonly IGameObject gameObject;
+        private readonly IGameObject gameObject;    // set via reflection
 
         public bool IsEnabled;
+
+        public IRenderable Renderable { get; private set; }
 
         protected GOC() {
             IsEnabled = true;
@@ -26,11 +28,9 @@ namespace GameEngine.Game.GameObjects.GameObjectComponents {
 
         protected virtual void Update() { }
 
-        private void Render() {
-            Renderable?.Render();
+        protected void CreateRenderable(ShaderVertexAttributeResolver attributeResolver, ShaderUniformAssignmentHandler shaderUniformAssignmentHandler, IShader shader, IMesh mesh) {
+            Renderable = GraphicsHandler.CreateRenderable(attributeResolver, shaderUniformAssignmentHandler, shader, mesh);
         }
-
-        protected virtual Renderable Renderable => null;
 
         /// <summary>
         /// Returns true if this GOC is enabled, and its GameObject is enabled and alive.
@@ -45,7 +45,5 @@ namespace GameEngine.Game.GameObjects.GameObjectComponents {
         public Transform Transform => GameObject.Transform;
 
         private Action GetUpdateMethod => Update;
-
-        private Action GetRenderMethod => Render;
     }
 }
